@@ -157,41 +157,36 @@ def import_contacts():
         imported = 0
         errors = []
         
-        # Column mapping
-        mapping = {
-            'email': 'email',
-            'first_name': 'first_name',
-            'last_name': 'last_name',
-            'company': 'company',
-            'position': 'title',
-            'title': 'title',
-            'organization': 'company',
-        }
-        
         fieldnames_lower = {name.lower().strip(): name for name in reader.fieldnames} if reader.fieldnames else {}
+        
+        def get_csv_value(row, *possible_names):
+            for name in possible_names:
+                if name in fieldnames_lower:
+                    val = row.get(fieldnames_lower[name], '').strip()
+                    if val and val.upper() != 'N/A':
+                        return val
+            return None
         
         with get_db() as conn:
             for row in reader:
-                email = None
-                first_name = None
-                last_name = None
-                company = None
-                title = None
+                email = get_csv_value(row, 'email', 'work email', 'work_email', 'e-mail', 'email address')
+                if not email:
+                    email = get_csv_value(row, 'personal email', 'personal_email')
+                if email:
+                    email = email.lower()
                 
-                for csv_col, our_field in mapping.items():
-                    if csv_col in fieldnames_lower:
-                        value = row.get(fieldnames_lower[csv_col], '').strip()
-                        if value:
-                            if our_field == 'email':
-                                email = value.lower()
-                            elif our_field == 'first_name':
-                                first_name = value
-                            elif our_field == 'last_name':
-                                last_name = value
-                            elif our_field == 'company' and not company:
-                                company = value
-                            elif our_field == 'title' and not title:
-                                title = value
+                first_name = get_csv_value(row, 'first_name', 'first name', 'firstname')
+                last_name = get_csv_value(row, 'last_name', 'last name', 'lastname')
+                
+                if not first_name and not last_name:
+                    full_name = get_csv_value(row, 'name', 'full name', 'full_name', 'contact name')
+                    if full_name:
+                        parts = full_name.split(None, 1)
+                        first_name = parts[0]
+                        last_name = parts[1] if len(parts) > 1 else None
+                
+                company = get_csv_value(row, 'company', 'organization', 'company name', 'company_name', 'org')
+                title = get_csv_value(row, 'title', 'position', 'job title', 'job_title', 'role')
                 
                 if not email:
                     continue
