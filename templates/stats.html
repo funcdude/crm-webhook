@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics - CRM{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Email Statistics</h1>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+    <!-- Overall Stats -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Overall</h3>
+        <div class="space-y-3">
+            <div class="flex justify-between">
+                <span class="text-gray-500">Total Sent</span>
+                <span class="font-medium">{{ total }}</span>
+            </div>
+            {% for stat in by_status %}
+            <div class="flex justify-between">
+                <span class="text-gray-500">
+                    {% if stat.status == 'sent' %}📤 Sent
+                    {% elif stat.status == 'delivered' %}📬 Delivered
+                    {% elif stat.status == 'opened' %}👀 Opened
+                    {% elif stat.status == 'clicked' %}🖱️ Clicked
+                    {% elif stat.status == 'bounced' %}⚠️ Bounced
+                    {% else %}{{ stat.status }}
+                    {% endif %}
+                </span>
+                <span class="font-medium">{{ stat.count }} {% if total > 0 %}({{ (stat.count / total * 100)|round(1) }}%){% endif %}</span>
+            </div>
+            {% endfor %}
+            <div class="border-t pt-3 flex justify-between">
+                <span class="text-gray-700 font-medium">💬 Replies</span>
+                <span class="font-bold text-green-600">{{ replied }} {% if total > 0 %}({{ (replied / total * 100)|round(1) }}%){% endif %}</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- By Sequence -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">By Sequence</h3>
+        <div class="space-y-4">
+            {% for seq in by_sequence %}
+            {% if seq.sent > 0 %}
+            <div>
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="font-medium text-gray-900">{{ seq.name }}</span>
+                    <span class="text-gray-500">{{ seq.sent }} sent</span>
+                </div>
+                <div class="flex gap-4 text-sm text-gray-500">
+                    <span>👀 {{ seq.opened }} opened</span>
+                    <span>💬 {{ seq.replied }} replied</span>
+                </div>
+                {% if seq.sent > 0 %}
+                <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                    <div class="bg-green-500 h-2 rounded-full" style="width: {{ (seq.replied / seq.sent * 100)|round }}%"></div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% else %}
+            <p class="text-gray-500">No data yet</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

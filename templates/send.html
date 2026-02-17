@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Send Emails - CRM{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Send Queue</h1>
+    <p class="text-gray-600 mt-1">Emails ready to be sent based on sequence schedules</p>
+</div>
+
+{% if not resend_configured %}
+<div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+    <p class="text-yellow-800">
+        ⚠️ <strong>Resend not configured.</strong> Add your RESEND_API_KEY in Secrets to enable sending.
+    </p>
+</div>
+{% endif %}
+
+{% if due_emails %}
+<div class="bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="text-lg font-medium text-gray-900">{{ due_emails|length }} email(s) ready</h3>
+        {% if resend_configured %}
+        <form method="POST">
+            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
+                Send All →
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    
+    <div class="divide-y divide-gray-200">
+        {% for email in due_emails %}
+        <div class="p-4">
+            <div class="flex justify-between items-start mb-2">
+                <div>
+                    <span class="font-medium text-gray-900">{{ email.first_name or '' }} {{ email.last_name or '' }}</span>
+                    <span class="text-gray-500">&lt;{{ email.email }}&gt;</span>
+                </div>
+                <span class="text-sm text-gray-500">{{ email.sequence_name }} - Step {{ email.step_number }}</span>
+            </div>
+            <div class="bg-gray-50 rounded p-3 text-sm">
+                <div class="font-medium text-gray-800">Subject: {{ email.subject }}</div>
+                <div class="text-gray-600 mt-1 whitespace-pre-wrap">{{ email.body[:300] }}{% if email.body|length > 300 %}...{% endif %}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="bg-white shadow rounded-lg p-8 text-center">
+    <div class="text-4xl mb-4">✨</div>
+    <h3 class="text-lg font-medium text-gray-900">All caught up!</h3>
+    <p class="text-gray-500 mt-1">No emails scheduled to send right now.</p>
+    <a href="/sequences" class="inline-block mt-4 text-indigo-600 hover:text-indigo-500">
+        Manage sequences →
+    </a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Sequences - CRM{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+    <h1 class="text-2xl font-bold text-gray-900">Email Sequences</h1>
+    <a href="/sequences/new" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
+        New Sequence
+    </a>
+</div>
+
+<div class="grid gap-4">
+    {% for seq in sequences %}
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex justify-between items-start">
+            <div>
+                <h3 class="text-lg font-medium text-gray-900">{{ seq.name }}</h3>
+                {% if seq.description %}
+                <p class="text-gray-500 text-sm mt-1">{{ seq.description }}</p>
+                {% endif %}
+            </div>
+            <a href="/sequences/{{ seq.id }}" class="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+                Edit →
+            </a>
+        </div>
+        
+        <div class="mt-4 flex gap-6 text-sm">
+            <div>
+                <span class="text-gray-500">Steps:</span>
+                <span class="font-medium">{{ seq.steps }}</span>
+            </div>
+            <div>
+                <span class="text-gray-500">Active:</span>
+                <span class="font-medium text-green-600">{{ seq.active }}</span>
+            </div>
+            <div>
+                <span class="text-gray-500">Replied:</span>
+                <span class="font-medium text-blue-600">{{ seq.replied }}</span>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white shadow rounded-lg p-6 text-center text-gray-500">
+        No sequences yet. <a href="/sequences/new" class="text-indigo-600 hover:underline">Create one!</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

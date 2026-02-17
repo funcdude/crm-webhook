@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Contacts - CRM{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+    <h1 class="text-2xl font-bold text-gray-900">Contacts</h1>
+    <a href="/contacts/import" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
+        Import CSV
+    </a>
+</div>
+
+{% if tags %}
+<div class="mb-4 flex flex-wrap gap-2">
+    <a href="/contacts" class="px-3 py-1 rounded-full text-sm {% if not current_tag %}bg-indigo-600 text-white{% else %}bg-gray-200 text-gray-700 hover:bg-gray-300{% endif %}">
+        All
+    </a>
+    {% for tag in tags %}
+    <a href="/contacts?tag={{ tag }}" class="px-3 py-1 rounded-full text-sm {% if current_tag == tag %}bg-indigo-600 text-white{% else %}bg-gray-200 text-gray-700 hover:bg-gray-300{% endif %}">
+        {{ tag }}
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="bg-white shadow rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sequences</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Emails</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for contact in contacts %}
+            <tr>
+                <td class="px-6 py-4">
+                    <div class="text-sm font-medium text-gray-900">
+                        {{ contact.first_name or '' }} {{ contact.last_name or '' }}
+                    </div>
+                    <div class="text-sm text-gray-500">{{ contact.email }}</div>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="text-sm text-gray-900">{{ contact.company or '-' }}</div>
+                    <div class="text-sm text-gray-500">{{ contact.title or '' }}</div>
+                </td>
+                <td class="px-6 py-4">
+                    {% if contact.tags %}
+                    <div class="flex flex-wrap gap-1">
+                        {% for tag in contact.tags.split(',') %}
+                        <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">{{ tag.strip() }}</span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span class="text-gray-400">-</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ contact.sequences }}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ contact.emails }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                    No contacts yet. <a href="/contacts/import" class="text-indigo-600 hover:underline">Import some!</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
