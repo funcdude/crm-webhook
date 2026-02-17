@@ -1,4 +1,4 @@
-# SimpleCRM
+# SimpleCRM — MVP v0.2
 
 ## Overview
 
@@ -70,7 +70,12 @@ All configuration is via environment variables (Replit Secrets):
 - **Resend** (resend.com) - Email delivery service. Requires domain verification (SPF + DKIM DNS records). Used for both sending emails and receiving delivery/engagement webhooks.
 - **Hunter.io** - Not directly integrated via API, but the CSV import is designed to accept various CSV formats including Hunter.io exports. Supports flexible column mapping (Name, Work Email, Personal Email, Company, Title, etc.)
 
+## Version History
+- **MVP v0.2** (2026-02-17): Email templates, improved CSV import, Resend integration verified
+- **MVP v0.1**: Initial CRM with contacts, sequences, send queue, webhooks, stats
+
 ## Recent Changes
+- 2026-02-17: Verified Resend email sending works end-to-end (test email sent successfully)
 - 2026-02-17: Added email templates feature - reusable templates that can be created manually or imported from JSON files, then applied to sequence steps via a dropdown picker. JSON import auto-converts personalized emails into templates with {first_name}, {company} placeholders.
 - 2026-02-17: Improved CSV import to handle diverse column names (Name, Work Email, Personal Email, etc.) and skip N/A values.
 
