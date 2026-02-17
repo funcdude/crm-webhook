@@ -36,6 +36,15 @@
                 <!-- Add Step Form -->
                 <div class="border-2 border-dashed border-gray-300 rounded-lg p-4">
                     <h4 class="text-sm font-medium text-gray-700 mb-3">Add New Step</h4>
+                    
+                    <div class="mb-4 p-3 bg-indigo-50 rounded-md">
+                        <label class="block text-xs font-medium text-indigo-700 mb-1">Load from Template</label>
+                        <select id="template-picker" onchange="loadTemplate(this.value)"
+                            class="block w-full rounded-md border-indigo-200 shadow-sm text-sm p-2 border bg-white">
+                            <option value="">-- Write manually or pick a template --</option>
+                        </select>
+                    </div>
+
                     <form method="POST" action="/sequences/{{ sequence.id }}/steps">
                         <div class="grid grid-cols-2 gap-3 mb-3">
                             <div>
@@ -51,12 +60,12 @@
                         </div>
                         <div class="mb-3">
                             <label class="block text-xs text-gray-500 mb-1">Subject</label>
-                            <input type="text" name="subject" required placeholder="Quick question about {company}"
+                            <input type="text" name="subject" id="step-subject" required placeholder="Quick question about {company}"
                                 class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
                         </div>
                         <div class="mb-3">
                             <label class="block text-xs text-gray-500 mb-1">Body (use {first_name}, {company}, etc.)</label>
-                            <textarea name="body" rows="4" required placeholder="Hi {first_name},&#10;&#10;I noticed..."
+                            <textarea name="body" id="step-body" rows="6" required placeholder="Hi {first_name},&#10;&#10;I noticed..."
                                 class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border font-mono"></textarea>
                         </div>
                         <button type="submit" class="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-indigo-700">
@@ -64,6 +73,42 @@
                         </button>
                     </form>
                 </div>
+
+                <script>
+                    var allTemplates = [];
+                    fetch('/api/templates')
+                        .then(r => r.json())
+                        .then(data => {
+                            allTemplates = data;
+                            var picker = document.getElementById('template-picker');
+                            var currentType = '';
+                            data.forEach(function(t) {
+                                if (t.template_type && t.template_type !== currentType) {
+                                    var optgroup = document.createElement('optgroup');
+                                    optgroup.label = t.template_type;
+                                    picker.appendChild(optgroup);
+                                    currentType = t.template_type;
+                                }
+                                var opt = document.createElement('option');
+                                opt.value = t.id;
+                                opt.textContent = t.name + ' - ' + t.subject.substring(0, 50);
+                                if (currentType) {
+                                    picker.lastElementChild.appendChild(opt);
+                                } else {
+                                    picker.appendChild(opt);
+                                }
+                            });
+                        });
+                    
+                    function loadTemplate(id) {
+                        if (!id) return;
+                        var tpl = allTemplates.find(function(t) { return t.id == id; });
+                        if (tpl) {
+                            document.getElementById('step-subject').value = tpl.subject;
+                            document.getElementById('step-body').value = tpl.body;
+                        }
+                    }
+                </script>
             </div>
         </div>
     </div>

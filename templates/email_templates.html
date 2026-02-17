@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Email Templates - CRM{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+    <h1 class="text-2xl font-bold text-gray-900">Email Templates</h1>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2">
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">Templates ({{ templates|length }})</h3>
+            </div>
+
+            {% if types %}
+            <div class="px-4 pt-4 flex gap-2 flex-wrap">
+                {% for t in types %}
+                <span class="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">{{ t }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="divide-y divide-gray-200">
+                {% for tpl in templates %}
+                <div class="p-4">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-medium text-gray-900 text-sm">{{ tpl.name }}</span>
+                                {% if tpl.template_type %}
+                                <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">{{ tpl.template_type }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-sm text-indigo-600 mb-1">{{ tpl.subject }}</div>
+                            <div class="text-xs text-gray-500 whitespace-pre-wrap">{{ tpl.body[:200] }}{% if tpl.body|length > 200 %}...{% endif %}</div>
+                        </div>
+                        <form method="POST" action="/templates/{{ tpl.id }}/delete" class="ml-3 flex-shrink-0">
+                            <button type="submit" onclick="return confirm('Delete this template?')" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <div class="p-8 text-center text-gray-500">
+                    No templates yet. Create one manually or import from a JSON file.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-6">
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Import from JSON</h3>
+            </div>
+            <div class="p-4">
+                <form method="POST" action="/templates/import" enctype="multipart/form-data">
+                    <p class="text-xs text-gray-500 mb-3">Upload a JSON file with an array of email objects. Each should have "subject", "body", and optionally "template_type", "contact_name", and "company".</p>
+                    <div class="mb-3">
+                        <input type="file" name="file" accept=".json" required
+                            class="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
+                        Import Templates
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Create Template</h3>
+            </div>
+            <div class="p-4">
+                <form method="POST" action="/templates/new">
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-500 mb-1">Name</label>
+                        <input type="text" name="name" required placeholder="e.g., Infrastructure Cold Email"
+                            class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-500 mb-1">Type (optional)</label>
+                        <input type="text" name="template_type" placeholder="e.g., infrastructure, defi_protocol"
+                            class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-500 mb-1">Subject</label>
+                        <input type="text" name="subject" required placeholder="e.g., Quick question about {company}"
+                            class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-500 mb-1">Body (use {first_name}, {company}, etc.)</label>
+                        <textarea name="body" rows="6" required placeholder="Hi {first_name},&#10;&#10;..."
+                            class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border font-mono"></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-green-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-green-700">
+                        Create Template
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

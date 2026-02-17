@@ -7,6 +7,7 @@ Runs on Replit with:
 - Email sending via Resend API
 """
 import os
+import re
 import csv
 import json
 import hmac
@@ -478,6 +479,118 @@ def stats():
         replied=replied,
         by_sequence=by_sequence
     )
+
+# ============== Email Templates ==============
+
+@app.route('/templates')
+def email_templates():
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM email_templates ORDER BY template_type, created_at DESC
+        """).fetchall()
+        types = conn.execute("""
+            SELECT DISTINCT template_type FROM email_templates 
+            WHERE template_type IS NOT NULL ORDER BY template_type
+        """).fetchall()
+    return render_template('email_templates.html', templates=rows, types=[t['template_type'] for t in types])
+
+@app.route('/templates/new', methods=['POST'])
+def new_template():
+    name = request.form.get('name', '').strip()
+    template_type = request.form.get('template_type', '').strip() or None
+    subject = request.form.get('subject', '').strip()
+    body = request.form.get('body', '').strip()
+    
+    if not name or not subject or not body:
+        flash('Name, subject and body are required', 'error')
+        return redirect(url_for('email_templates'))
+    
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO email_templates (name, template_type, subject, body)
+            VALUES (?, ?, ?, ?)
+        """, (name, template_type, subject, body))
+    
+    flash(f'Created template "{name}"', 'success')
+    return redirect(url_for('email_templates'))
+
+@app.route('/templates/import', methods=['POST'])
+def import_templates():
+    if 'file' not in request.files:
+        flash('No file uploaded', 'error')
+        return redirect(url_for('email_templates'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected', 'error')
+        return redirect(url_for('email_templates'))
+    
+    try:
+        content = file.read().decode('utf-8-sig')
+        data = json.loads(content)
+        
+        if not isinstance(data, list):
+            data = [data]
+        
+        imported = 0
+        with get_db() as conn:
+            for item in data:
+                subject = item.get('subject', '').strip()
+                body = item.get('body', '').strip()
+                if not subject or not body:
+                    continue
+                
+                template_type = item.get('template_type', '').strip() or None
+                name = item.get('contact_name') or item.get('name') or f"{template_type or 'email'} template"
+                
+                subject_template = subject
+                body_template = body
+                
+                contact_name = item.get('contact_name', '')
+                if contact_name:
+                    parts = contact_name.split()
+                    first = parts[0]
+                    last = parts[-1] if len(parts) > 1 else ''
+                    
+                    greetings = ['Hi', 'Hey', 'Hello', 'Dear']
+                    for g in greetings:
+                        pattern = re.compile(re.escape(f'{g} {first}') + r'(?=[,\s!.\n]|$)')
+                        body_template = pattern.sub(f'{g} {{first_name}}', body_template)
+                    
+                    if last and last != first:
+                        body_template = body_template.replace(f'{first} {last}', '{first_name} {last_name}')
+                
+                company = item.get('company', '')
+                if company:
+                    subject_template = subject_template.replace(company, '{company}')
+                    body_template = body_template.replace(company, '{company}')
+                
+                conn.execute("""
+                    INSERT INTO email_templates (name, template_type, subject, body)
+                    VALUES (?, ?, ?, ?)
+                """, (name, template_type, subject_template, body_template))
+                imported += 1
+        
+        flash(f'Imported {imported} templates', 'success')
+    except json.JSONDecodeError:
+        flash('Invalid JSON file', 'error')
+    except Exception as e:
+        flash(f'Import error: {e}', 'error')
+    
+    return redirect(url_for('email_templates'))
+
+@app.route('/templates/<int:tpl_id>/delete', methods=['POST'])
+def delete_template(tpl_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM email_templates WHERE id = ?", (tpl_id,))
+    flash('Template deleted', 'success')
+    return redirect(url_for('email_templates'))
+
+@app.route('/api/templates')
+def api_templates():
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM email_templates ORDER BY template_type, name").fetchall()
+    return jsonify([dict(r) for r in rows])
 
 # ============== Webhook Endpoint ==============
 

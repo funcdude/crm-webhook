@@ -89,6 +89,16 @@ CREATE TABLE IF NOT EXISTS events (
     processed INTEGER DEFAULT 0
 );
 
+-- Reusable email templates
+CREATE TABLE IF NOT EXISTS email_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    template_type TEXT,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
 CREATE INDEX IF NOT EXISTS idx_contact_sequences_status ON contact_sequences(status);
