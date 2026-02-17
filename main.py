@@ -103,6 +103,61 @@ def get_events():
         'latest_id': events[-1]['id'] if events else 0
     })
 
+@app.route('/events/summary', methods=['GET'])
+def get_events_summary():
+    """Get aggregated summary of stored events (bot-friendly)."""
+    api_key = request.headers.get('X-API-Key', '')
+    if API_KEY and API_KEY != 'change-me-in-secrets' and api_key != API_KEY:
+        return jsonify({'error': 'Invalid API key'}), 401
+
+    type_counts = {}
+    for e in events:
+        t = e.get('type', 'unknown')
+        type_counts[t] = type_counts.get(t, 0) + 1
+
+    recent = events[-10:] if events else []
+    recent_formatted = [
+        {
+            'id': e['id'],
+            'type': e['type'],
+            'resend_id': e.get('resend_id'),
+            'received_at': e['received_at']
+        }
+        for e in recent
+    ]
+
+    return jsonify({
+        'total_events': len(events),
+        'by_type': type_counts,
+        'latest_id': events[-1]['id'] if events else 0,
+        'oldest_id': events[0]['id'] if events else 0,
+        'recent_events': recent_formatted
+    })
+
+@app.route('/events/search', methods=['GET'])
+def search_events():
+    """Search events by type or resend_id."""
+    api_key = request.headers.get('X-API-Key', '')
+    if API_KEY and API_KEY != 'change-me-in-secrets' and api_key != API_KEY:
+        return jsonify({'error': 'Invalid API key'}), 401
+
+    event_type = request.args.get('type', '')
+    resend_id = request.args.get('resend_id', '')
+    limit = request.args.get('limit', 50, type=int)
+
+    filtered = events
+    if event_type:
+        filtered = [e for e in filtered if e.get('type') == event_type]
+    if resend_id:
+        filtered = [e for e in filtered if e.get('resend_id') == resend_id]
+
+    filtered = filtered[-limit:]
+
+    return jsonify({
+        'events': filtered,
+        'count': len(filtered)
+    })
+
 @app.route('/events/clear', methods=['POST'])
 def clear_events():
     """Clear all stored events (admin function)."""
