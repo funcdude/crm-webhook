@@ -650,6 +650,98 @@ def api_templates():
         rows = conn.execute("SELECT * FROM email_templates ORDER BY template_type, name").fetchall()
     return jsonify([dict(r) for r in rows])
 
+# ============== Sequence Test Runner ==============
+
+@app.route('/test-sequence')
+def test_sequence():
+    with get_db() as conn:
+        all_sequences = conn.execute("""
+            SELECT s.*, COUNT(ss.id) as step_count 
+            FROM sequences s
+            LEFT JOIN sequence_steps ss ON ss.sequence_id = s.id
+            GROUP BY s.id ORDER BY s.name
+        """).fetchall()
+        all_contacts = conn.execute(
+            "SELECT id, email, first_name, last_name, company, title FROM contacts ORDER BY email"
+        ).fetchall()
+        
+        previews = []
+        selected_seq = request.args.get('sequence_id', type=int)
+        selected_contact = request.args.get('contact_id', type=int)
+        contact_data = None
+        
+        if selected_seq and selected_contact:
+            contact_row = conn.execute(
+                "SELECT * FROM contacts WHERE id = ?", (selected_contact,)
+            ).fetchone()
+            if contact_row:
+                contact_data = dict(contact_row)
+                steps = conn.execute("""
+                    SELECT * FROM sequence_steps WHERE sequence_id = ? ORDER BY step_number
+                """, (selected_seq,)).fetchall()
+                for step in steps:
+                    previews.append({
+                        'step_number': step['step_number'],
+                        'delay_days': step['delay_days'],
+                        'subject_raw': step['subject'],
+                        'body_raw': step['body'],
+                        'subject': personalize(step['subject'], contact_data),
+                        'body': personalize(step['body'], contact_data),
+                    })
+    
+    return render_template('test_sequence.html',
+        sequences=all_sequences,
+        contacts=all_contacts,
+        previews=previews,
+        selected_seq=selected_seq,
+        selected_contact=selected_contact,
+        contact_data=contact_data,
+        resend_configured=bool(resend)
+    )
+
+@app.route('/test-sequence/send', methods=['POST'])
+def test_send_email():
+    if not resend:
+        flash('Resend is not configured', 'error')
+        return redirect(url_for('test_sequence'))
+    
+    to_email = request.form.get('to_email', '').strip()
+    step_num = request.form.get('step_number', type=int)
+    seq_id = request.form.get('sequence_id', type=int)
+    contact_id = request.form.get('contact_id', type=int)
+    
+    if not to_email or not step_num or not seq_id or not contact_id:
+        flash('Missing email details', 'error')
+        return redirect(url_for('test_sequence'))
+    
+    with get_db() as conn:
+        contact_row = conn.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+        step_row = conn.execute("""
+            SELECT * FROM sequence_steps WHERE sequence_id = ? AND step_number = ?
+        """, (seq_id, step_num)).fetchone()
+    
+    if not contact_row or not step_row:
+        flash('Contact or step not found', 'error')
+        return redirect(url_for('test_sequence', sequence_id=seq_id, contact_id=contact_id))
+    
+    contact_data = dict(contact_row)
+    subject = personalize(step_row['subject'], contact_data)
+    body = personalize(step_row['body'], contact_data)
+    
+    try:
+        resend.Emails.send({
+            "from": FROM_EMAIL,
+            "to": [to_email],
+            "reply_to": REPLY_TO,
+            "subject": f"[TEST] {subject}",
+            "text": body,
+        })
+        flash(f'Test email for Step {step_num} sent to {to_email}', 'success')
+    except Exception as e:
+        flash(f'Send error: {e}', 'error')
+    
+    return redirect(url_for('test_sequence', sequence_id=seq_id, contact_id=contact_id))
+
 # ============== Webhook Endpoint ==============
 
 @app.route('/webhook', methods=['POST'])

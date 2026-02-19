@@ -75,6 +75,7 @@ All configuration is via environment variables (Replit Secrets):
 - **MVP v0.1**: Initial CRM with contacts, sequences, send queue, webhooks, stats
 
 ## Recent Changes
+- 2026-02-19: Added Test Sequence Runner page — preview personalized emails for any sequence + contact combination, and send test emails with [TEST] prefix. Server-side content generation for security.
 - 2026-02-17: Verified Resend email sending works end-to-end (test email sent successfully)
 - 2026-02-17: Added email templates feature - reusable templates that can be created manually or imported from JSON files, then applied to sequence steps via a dropdown picker. JSON import auto-converts personalized emails into templates with {first_name}, {company} placeholders.
 - 2026-02-17: Improved CSV import to handle diverse column names (Name, Work Email, Personal Email, etc.) and skip N/A values.

@@ -24,11 +24,14 @@
                         <a href="/contacts" class="{% if 'contact' in request.endpoint %}border-indigo-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             Contacts
                         </a>
-                        <a href="/sequences" class="{% if 'sequence' in request.endpoint %}border-indigo-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        <a href="/sequences" class="{% if request.endpoint in ('sequences', 'new_sequence', 'edit_sequence', 'add_step', 'enroll_contacts') %}border-indigo-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             Sequences
                         </a>
-                        <a href="/templates" class="{% if 'template' in request.endpoint %}border-indigo-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        <a href="/templates" class="{% if request.endpoint in ('email_templates', 'new_template', 'edit_template', 'import_templates') %}border-indigo-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             Templates
+                        </a>
+                        <a href="/test-sequence" class="{% if request.endpoint in ('test_sequence', 'test_send_email') %}border-indigo-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Test
                         </a>
                         <a href="/send" class="{% if request.endpoint == 'send_emails' %}border-indigo-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             Send

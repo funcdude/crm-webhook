@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Test Sequence - CRM{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Test Sequence Runner</h1>
+    <p class="text-gray-500 text-sm mt-1">Preview personalized emails and send test copies to verify quality before launching.</p>
+</div>
+
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <form method="GET" action="/test-sequence" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Sequence</label>
+            <select name="sequence_id" required
+                class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                <option value="">-- Pick a sequence --</option>
+                {% for seq in sequences %}
+                <option value="{{ seq.id }}" {% if selected_seq == seq.id %}selected{% endif %}>
+                    {{ seq.name }} ({{ seq.step_count }} steps)
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Test Contact</label>
+            <select name="contact_id" required
+                class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                <option value="">-- Pick a contact --</option>
+                {% for c in contacts %}
+                <option value="{{ c.id }}" {% if selected_contact == c.id %}selected{% endif %}>
+                    {{ c.first_name or '' }} {{ c.last_name or '' }} ({{ c.email }}) {% if c.company %}- {{ c.company }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <button type="submit" class="w-full bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
+                Preview Emails
+            </button>
+        </div>
+    </form>
+</div>
+
+{% if previews %}
+<div class="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <div class="flex items-center gap-3">
+        <div class="text-sm">
+            <span class="font-medium text-blue-900">Previewing for:</span>
+            <span class="text-blue-700">{{ contact_data.first_name or '' }} {{ contact_data.last_name or '' }}</span>
+            <span class="text-blue-500">({{ contact_data.email }})</span>
+            {% if contact_data.company %}
+            <span class="text-blue-500">at {{ contact_data.company }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="space-y-4">
+    {% for preview in previews %}
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="px-5 py-3 bg-gray-50 border-b flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold">
+                    {{ preview.step_number }}
+                </span>
+                <div>
+                    <span class="text-sm font-medium text-gray-900">Step {{ preview.step_number }}</span>
+                    <span class="text-xs text-gray-500 ml-2">
+                        {% if preview.delay_days == 0 %}Immediate{% else %}+{{ preview.delay_days }} days after previous{% endif %}
+                    </span>
+                </div>
+            </div>
+            {% if resend_configured %}
+            <form method="POST" action="/test-sequence/send" class="flex items-center gap-2">
+                <input type="hidden" name="sequence_id" value="{{ selected_seq }}">
+                <input type="hidden" name="contact_id" value="{{ selected_contact }}">
+                <input type="hidden" name="step_number" value="{{ preview.step_number }}">
+                <input type="email" name="to_email" value="{{ contact_data.email }}" 
+                    class="text-xs border rounded px-2 py-1 w-48" placeholder="Send to...">
+                <button type="submit" onclick="return confirm('Send test email for Step {{ preview.step_number }}?')"
+                    class="bg-green-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-green-700 whitespace-nowrap">
+                    Send Test
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        
+        <div class="p-5">
+            <div class="mb-3">
+                <span class="text-xs font-medium text-gray-500 uppercase">Subject</span>
+                <div class="text-sm font-medium text-gray-900 mt-1 p-2 bg-gray-50 rounded">{{ preview.subject }}</div>
+            </div>
+            <div>
+                <span class="text-xs font-medium text-gray-500 uppercase">Body</span>
+                <div class="text-sm text-gray-800 mt-1 p-3 bg-gray-50 rounded whitespace-pre-wrap font-mono leading-relaxed">{{ preview.body }}</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% elif selected_seq and selected_contact %}
+<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+    <p class="text-yellow-800">This sequence has no steps yet. Add steps in the sequence editor first.</p>
+</div>
+{% else %}
+<div class="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+    <p class="text-gray-500">Select a sequence and a contact above, then click "Preview Emails" to see what the personalized emails will look like.</p>
+</div>
+{% endif %}
+{% endblock %}
