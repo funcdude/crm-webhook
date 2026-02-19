@@ -609,6 +609,26 @@ def import_templates():
     
     return redirect(url_for('email_templates'))
 
+@app.route('/templates/<int:tpl_id>/edit', methods=['POST'])
+def edit_template(tpl_id):
+    name = request.form.get('name', '').strip()
+    template_type = request.form.get('template_type', '').strip() or None
+    subject = request.form.get('subject', '').strip()
+    body = request.form.get('body', '').strip()
+    
+    if not name or not subject or not body:
+        flash('Name, subject and body are required', 'error')
+        return redirect(url_for('email_templates'))
+    
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE email_templates SET name = ?, template_type = ?, subject = ?, body = ?
+            WHERE id = ?
+        """, (name, template_type, subject, body, tpl_id))
+    
+    flash('Template updated', 'success')
+    return redirect(url_for('email_templates'))
+
 @app.route('/templates/<int:tpl_id>/delete', methods=['POST'])
 def delete_template(tpl_id):
     with get_db() as conn:

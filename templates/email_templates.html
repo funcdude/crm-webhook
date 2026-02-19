@@ -24,20 +24,56 @@
 
             <div class="divide-y divide-gray-200">
                 {% for tpl in templates %}
-                <div class="p-4">
-                    <div class="flex justify-between items-start">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="font-medium text-gray-900 text-sm">{{ tpl.name }}</span>
-                                {% if tpl.template_type %}
-                                <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">{{ tpl.template_type }}</span>
-                                {% endif %}
+                <div class="p-4" id="tpl-{{ tpl.id }}">
+                    <div class="view-mode">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="font-medium text-gray-900 text-sm">{{ tpl.name }}</span>
+                                    {% if tpl.template_type %}
+                                    <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">{{ tpl.template_type }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-sm text-indigo-600 mb-1">{{ tpl.subject }}</div>
+                                <div class="text-xs text-gray-500 whitespace-pre-wrap">{{ tpl.body[:200] }}{% if tpl.body|length > 200 %}...{% endif %}</div>
                             </div>
-                            <div class="text-sm text-indigo-600 mb-1">{{ tpl.subject }}</div>
-                            <div class="text-xs text-gray-500 whitespace-pre-wrap">{{ tpl.body[:200] }}{% if tpl.body|length > 200 %}...{% endif %}</div>
+                            <div class="ml-3 flex-shrink-0 flex gap-2">
+                                <button onclick="startEditTpl({{ tpl.id }})" class="text-indigo-500 hover:text-indigo-700 text-xs font-medium">Edit</button>
+                                <form method="POST" action="/templates/{{ tpl.id }}/delete" class="inline">
+                                    <button type="submit" onclick="return confirm('Delete this template?')" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+                                </form>
+                            </div>
                         </div>
-                        <form method="POST" action="/templates/{{ tpl.id }}/delete" class="ml-3 flex-shrink-0">
-                            <button type="submit" onclick="return confirm('Delete this template?')" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+                    </div>
+
+                    <div class="edit-mode hidden">
+                        <form method="POST" action="/templates/{{ tpl.id }}/edit">
+                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Name</label>
+                                    <input type="text" name="name" value="{{ tpl.name }}" required
+                                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Type</label>
+                                    <input type="text" name="template_type" value="{{ tpl.template_type or '' }}"
+                                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-xs text-gray-500 mb-1">Subject</label>
+                                <input type="text" name="subject" value="{{ tpl.subject }}" required
+                                    class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-xs text-gray-500 mb-1">Body</label>
+                                <textarea name="body" rows="6" required
+                                    class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border font-mono">{{ tpl.body }}</textarea>
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="submit" class="bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-green-700">Save</button>
+                                <button type="button" onclick="cancelEditTpl({{ tpl.id }})" class="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-xs font-medium hover:bg-gray-300">Cancel</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -103,4 +139,18 @@
         </div>
     </div>
 </div>
+
+<script>
+function startEditTpl(id) {
+    var el = document.getElementById('tpl-' + id);
+    el.querySelector('.view-mode').classList.add('hidden');
+    el.querySelector('.edit-mode').classList.remove('hidden');
+}
+
+function cancelEditTpl(id) {
+    var el = document.getElementById('tpl-' + id);
+    el.querySelector('.view-mode').classList.remove('hidden');
+    el.querySelector('.edit-mode').classList.add('hidden');
+}
+</script>
 {% endblock %}
