@@ -27,12 +27,12 @@
     <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
             <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">First Name</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Name</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(0)">Email <span class="sort-arrow" data-col="0"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(1)">First Name <span class="sort-arrow" data-col="1"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(2)">Last Name <span class="sort-arrow" data-col="2"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(3)">Company <span class="sort-arrow" data-col="3"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(4)">Title <span class="sort-arrow" data-col="4"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(5)">Tags <span class="sort-arrow" data-col="5"></span></th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Actions</th>
             </tr>
         </thead>
@@ -95,6 +95,39 @@
 </div>
 
 <script>
+var currentSort = { col: -1, asc: true };
+
+function sortTable(colIndex) {
+    var table = document.querySelector('table');
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr[id^="row-"]'));
+    
+    if (rows.length === 0) return;
+    
+    var asc = (currentSort.col === colIndex) ? !currentSort.asc : true;
+    currentSort = { col: colIndex, asc: asc };
+    
+    rows.sort(function(a, b) {
+        var aCell = a.cells[colIndex];
+        var bCell = b.cells[colIndex];
+        var aText = (aCell.querySelector('.view-mode') || aCell).textContent.trim().toLowerCase();
+        var bText = (bCell.querySelector('.view-mode') || bCell).textContent.trim().toLowerCase();
+        if (aText === '-') aText = '';
+        if (bText === '-') bText = '';
+        if (aText < bText) return asc ? -1 : 1;
+        if (aText > bText) return asc ? 1 : -1;
+        return 0;
+    });
+    
+    rows.forEach(function(row) { tbody.appendChild(row); });
+    
+    document.querySelectorAll('.sort-arrow').forEach(function(el) {
+        el.textContent = '';
+    });
+    var arrow = document.querySelector('.sort-arrow[data-col="' + colIndex + '"]');
+    if (arrow) arrow.textContent = asc ? ' \u25B2' : ' \u25BC';
+}
+
 function startEdit(id) {
     var row = document.getElementById('row-' + id);
     row.querySelectorAll('.view-mode').forEach(function(el) { el.classList.add('hidden'); });
