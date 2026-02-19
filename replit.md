@@ -1,4 +1,4 @@
-# SimpleCRM — MVP v0.2
+# SimpleCRM — MVP v0.3
 
 ## Overview
 
@@ -35,7 +35,7 @@ Preferred communication style: Simple, everyday language.
 - **Templating**: Jinja2 templates in `templates/` directory, extending `base.html`
 - **Styling**: Tailwind CSS loaded via CDN (`cdn.tailwindcss.com`)
 - **No JavaScript framework**: Minimal client-side JS, standard HTML forms for all interactions
-- **Pages**: Dashboard (`index.html`), Contacts list + Import (`contacts.html`, `import.html`), Sequences list + Edit + New (`sequences.html`, `sequence_edit.html`, `sequence_new.html`), Email Templates (`email_templates.html`), Send Queue (`send.html`), Statistics (`stats.html`)
+- **Pages**: Dashboard (`index.html`), Contacts list + Import (`contacts.html`, `import.html`), Sequences list + Edit + New (`sequences.html`, `sequence_edit.html`, `sequence_new.html`), Email Templates (`email_templates.html`), Test Sequence Runner (`test_sequence.html`), Send Queue (`send.html`), Statistics (`stats.html`)
 
 ### Email Sending
 - **Provider**: Resend API via the `resend` Python library
@@ -71,6 +71,7 @@ All configuration is via environment variables (Replit Secrets):
 - **Hunter.io** - Not directly integrated via API, but the CSV import is designed to accept various CSV formats including Hunter.io exports. Supports flexible column mapping (Name, Work Email, Personal Email, Company, Title, etc.)
 
 ## Version History
+- **MVP v0.3** (2026-02-19): Test Sequence Runner, inline editing for contacts & templates, column sorting, nav highlight fixes
 - **MVP v0.2** (2026-02-17): Email templates, improved CSV import, Resend integration verified
 - **MVP v0.1**: Initial CRM with contacts, sequences, send queue, webhooks, stats
 
