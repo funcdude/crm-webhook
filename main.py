@@ -212,6 +212,36 @@ def import_contacts():
     
     return render_template('import.html')
 
+@app.route('/contacts/<int:contact_id>/edit', methods=['POST'])
+def edit_contact(contact_id):
+    email = request.form.get('email', '').strip().lower()
+    first_name = request.form.get('first_name', '').strip() or None
+    last_name = request.form.get('last_name', '').strip() or None
+    company = request.form.get('company', '').strip() or None
+    title = request.form.get('title', '').strip() or None
+    
+    if not email:
+        flash('Email is required', 'error')
+        return redirect(url_for('contacts'))
+    
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE contacts SET email = ?, first_name = ?, last_name = ?, 
+                company = ?, title = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (email, first_name, last_name, company, title, contact_id))
+    
+    flash('Contact updated', 'success')
+    return redirect(url_for('contacts'))
+
+@app.route('/contacts/<int:contact_id>/delete', methods=['POST'])
+def delete_contact(contact_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM contact_sequences WHERE contact_id = ?", (contact_id,))
+        conn.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
+    flash('Contact deleted', 'success')
+    return redirect(url_for('contacts'))
+
 @app.route('/sequences')
 def sequences():
     """List all sequences."""

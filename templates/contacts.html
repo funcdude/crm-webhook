@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="mb-6 flex justify-between items-center">
-    <h1 class="text-2xl font-bold text-gray-900">Contacts</h1>
+    <h1 class="text-2xl font-bold text-gray-900">Contacts ({{ contacts|length }})</h1>
     <a href="/contacts/import" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
         Import CSV
     </a>
@@ -27,27 +27,39 @@
     <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
             <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sequences</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Emails</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">First Name</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Name</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Actions</th>
             </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
             {% for contact in contacts %}
-            <tr>
-                <td class="px-6 py-4">
-                    <div class="text-sm font-medium text-gray-900">
-                        {{ contact.first_name or '' }} {{ contact.last_name or '' }}
-                    </div>
-                    <div class="text-sm text-gray-500">{{ contact.email }}</div>
+            <tr id="row-{{ contact.id }}">
+                <td class="px-4 py-3">
+                    <span class="view-mode text-sm text-gray-900">{{ contact.email }}</span>
+                    <input type="email" class="edit-mode hidden w-full text-sm p-1 border rounded" name="email" value="{{ contact.email }}">
                 </td>
-                <td class="px-6 py-4">
-                    <div class="text-sm text-gray-900">{{ contact.company or '-' }}</div>
-                    <div class="text-sm text-gray-500">{{ contact.title or '' }}</div>
+                <td class="px-4 py-3">
+                    <span class="view-mode text-sm text-gray-900">{{ contact.first_name or '-' }}</span>
+                    <input type="text" class="edit-mode hidden w-full text-sm p-1 border rounded" name="first_name" value="{{ contact.first_name or '' }}">
                 </td>
-                <td class="px-6 py-4">
+                <td class="px-4 py-3">
+                    <span class="view-mode text-sm text-gray-900">{{ contact.last_name or '-' }}</span>
+                    <input type="text" class="edit-mode hidden w-full text-sm p-1 border rounded" name="last_name" value="{{ contact.last_name or '' }}">
+                </td>
+                <td class="px-4 py-3">
+                    <span class="view-mode text-sm text-gray-900">{{ contact.company or '-' }}</span>
+                    <input type="text" class="edit-mode hidden w-full text-sm p-1 border rounded" name="company" value="{{ contact.company or '' }}">
+                </td>
+                <td class="px-4 py-3">
+                    <span class="view-mode text-sm text-gray-500">{{ contact.title or '-' }}</span>
+                    <input type="text" class="edit-mode hidden w-full text-sm p-1 border rounded" name="title" value="{{ contact.title or '' }}">
+                </td>
+                <td class="px-4 py-3">
                     {% if contact.tags %}
                     <div class="flex flex-wrap gap-1">
                         {% for tag in contact.tags.split(',') %}
@@ -55,15 +67,25 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <span class="text-gray-400">-</span>
+                    <span class="text-gray-400 text-sm">-</span>
                     {% endif %}
                 </td>
-                <td class="px-6 py-4 text-sm text-gray-500">{{ contact.sequences }}</td>
-                <td class="px-6 py-4 text-sm text-gray-500">{{ contact.emails }}</td>
+                <td class="px-4 py-3">
+                    <div class="view-mode flex gap-2">
+                        <button onclick="startEdit({{ contact.id }})" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Edit</button>
+                        <form method="POST" action="/contacts/{{ contact.id }}/delete" class="inline">
+                            <button type="submit" onclick="return confirm('Delete this contact?')" class="text-red-500 hover:text-red-700 text-xs font-medium">Delete</button>
+                        </form>
+                    </div>
+                    <div class="edit-mode hidden flex gap-2">
+                        <button onclick="saveEdit({{ contact.id }})" class="text-green-600 hover:text-green-800 text-xs font-medium">Save</button>
+                        <button onclick="cancelEdit({{ contact.id }})" class="text-gray-500 hover:text-gray-700 text-xs font-medium">Cancel</button>
+                    </div>
+                </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                <td colspan="7" class="px-6 py-4 text-center text-gray-500">
                     No contacts yet. <a href="/contacts/import" class="text-indigo-600 hover:underline">Import some!</a>
                 </td>
             </tr>
@@ -71,4 +93,40 @@
         </tbody>
     </table>
 </div>
+
+<script>
+function startEdit(id) {
+    var row = document.getElementById('row-' + id);
+    row.querySelectorAll('.view-mode').forEach(function(el) { el.classList.add('hidden'); });
+    row.querySelectorAll('.edit-mode').forEach(function(el) { el.classList.remove('hidden'); });
+}
+
+function cancelEdit(id) {
+    var row = document.getElementById('row-' + id);
+    row.querySelectorAll('.view-mode').forEach(function(el) { el.classList.remove('hidden'); });
+    row.querySelectorAll('.edit-mode').forEach(function(el) { el.classList.add('hidden'); });
+}
+
+function saveEdit(id) {
+    var row = document.getElementById('row-' + id);
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/contacts/' + id + '/edit';
+    
+    var fields = ['email', 'first_name', 'last_name', 'company', 'title'];
+    fields.forEach(function(field) {
+        var input = row.querySelector('input[name="' + field + '"]');
+        if (input) {
+            var hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = field;
+            hidden.value = input.value;
+            form.appendChild(hidden);
+        }
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
 {% endblock %}
