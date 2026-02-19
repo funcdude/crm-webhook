@@ -156,6 +156,7 @@ def import_contacts():
         reader = csv.DictReader(io.StringIO(content))
         
         imported = 0
+        skipped = 0
         errors = []
         
         fieldnames_lower = {name.lower().strip(): name for name in reader.fieldnames} if reader.fieldnames else {}
@@ -180,7 +181,7 @@ def import_contacts():
                 last_name = get_csv_value(row, 'last_name', 'last name', 'lastname')
                 
                 if not first_name and not last_name:
-                    full_name = get_csv_value(row, 'name', 'full name', 'full_name', 'contact name')
+                    full_name = get_csv_value(row, 'name', 'full name', 'full_name', 'contact name', 'contact_name')
                     if full_name:
                         parts = full_name.split(None, 1)
                         first_name = parts[0]
@@ -193,6 +194,7 @@ def import_contacts():
                     continue
                 
                 try:
+                    existing = conn.execute("SELECT id FROM contacts WHERE email = ?", (email,)).fetchone()
                     conn.execute("""
                         INSERT INTO contacts (email, first_name, last_name, company, title, source, tags)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -203,11 +205,17 @@ def import_contacts():
                             title = COALESCE(excluded.title, title),
                             updated_at = CURRENT_TIMESTAMP
                     """, (email, first_name, last_name, company, title, source, tags))
-                    imported += 1
+                    if existing:
+                        skipped += 1
+                    else:
+                        imported += 1
                 except Exception as e:
                     errors.append(str(e))
         
-        flash(f'Imported {imported} contacts', 'success')
+        msg = f'Imported {imported} new contacts'
+        if skipped:
+            msg += f', {skipped} duplicates updated'
+        flash(msg, 'success')
         return redirect(url_for('contacts'))
     
     return render_template('import.html')
