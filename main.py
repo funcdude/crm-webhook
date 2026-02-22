@@ -18,8 +18,15 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from db import get_db, init_db, dict_from_row
 
+from flask_swagger_ui import get_swaggerui_blueprint
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
+
+SWAGGER_URL = '/api/docs'
+API_URL = '/static/swagger.json'
+swaggerui_blueprint = get_swaggerui_blueprint(SWAGGER_URL, API_URL, config={'app_name': 'SimpleCRM API'})
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
 # Configuration from environment
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')

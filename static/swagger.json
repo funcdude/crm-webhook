@@ -1,0 +1,480 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SimpleCRM API",
+    "description": "REST API for bot and external tool integration with SimpleCRM. Manage contacts, sequences, and enrollments programmatically.",
+    "version": "0.4.0",
+    "contact": {
+      "name": "SimpleCRM"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API key passed as Bearer token. Set CRM_API_KEY in environment."
+      }
+    },
+    "schemas": {
+      "Contact": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "email": { "type": "string", "example": "jane@example.com" },
+          "first_name": { "type": "string", "example": "Jane" },
+          "last_name": { "type": "string", "example": "Doe" },
+          "company": { "type": "string", "example": "Acme Inc" },
+          "title": { "type": "string", "example": "CEO" },
+          "source": { "type": "string", "example": "api" },
+          "tags": { "type": "string", "example": "web3,outreach" },
+          "created_at": { "type": "string", "example": "2026-02-22 15:00:00" },
+          "updated_at": { "type": "string", "example": "2026-02-22 15:00:00" }
+        }
+      },
+      "ContactInput": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": { "type": "string", "example": "jane@example.com" },
+          "first_name": { "type": "string", "example": "Jane" },
+          "last_name": { "type": "string", "example": "Doe" },
+          "company": { "type": "string", "example": "Acme Inc" },
+          "title": { "type": "string", "example": "CEO" },
+          "source": { "type": "string", "example": "bot" },
+          "tags": { "type": "string", "example": "lead,web3" }
+        }
+      },
+      "Sequence": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Web3 PM Outreach" },
+          "description": { "type": "string", "example": "Three-step outreach" },
+          "step_count": { "type": "integer", "example": 3 },
+          "enrolled_contacts": { "type": "integer", "example": 12 },
+          "created_at": { "type": "string", "example": "2026-02-22 15:00:00" }
+        }
+      },
+      "SequenceStep": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "sequence_id": { "type": "integer" },
+          "step_number": { "type": "integer", "example": 1 },
+          "delay_days": { "type": "integer", "example": 0 },
+          "subject": { "type": "string", "example": "Hi {first_name}" },
+          "body": { "type": "string", "example": "I noticed {company}..." }
+        }
+      },
+      "Enrollment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "contact_id": { "type": "integer" },
+          "sequence_id": { "type": "integer" },
+          "sequence_name": { "type": "string", "example": "Web3 PM Outreach" },
+          "current_step": { "type": "integer", "example": 1 },
+          "total_steps": { "type": "integer", "example": 3 },
+          "status": { "type": "string", "enum": ["active", "completed", "replied", "bounced", "stopped"], "example": "active" },
+          "started_at": { "type": "string" },
+          "last_sent_at": { "type": "string", "nullable": true },
+          "next_send_at": { "type": "string", "nullable": true }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "example": "Invalid or missing API key" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "description": "Check if the CRM is running and whether API access and Resend are configured. No authentication required.",
+        "responses": {
+          "200": {
+            "description": "Service status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" },
+                    "api_configured": { "type": "boolean", "example": true },
+                    "resend_configured": { "type": "boolean", "example": true },
+                    "timestamp": { "type": "string", "example": "2026-02-22T15:00:00.000000" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts": {
+      "get": {
+        "tags": ["Contacts"],
+        "summary": "List contacts",
+        "description": "Retrieve contacts with optional search, tag filtering, and pagination.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search across email, first name, last name, and company" },
+          { "name": "tag", "in": "query", "schema": { "type": "string" }, "description": "Filter by tag (partial match)" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100 }, "description": "Max results to return" },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 }, "description": "Number of results to skip" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contacts": { "type": "array", "items": { "$ref": "#/components/schemas/Contact" } },
+                    "total": { "type": "integer", "example": 54 },
+                    "limit": { "type": "integer" },
+                    "offset": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "post": {
+        "tags": ["Contacts"],
+        "summary": "Add or update a contact",
+        "description": "Add a new contact or update an existing one (matched by email). If the email already exists, non-empty fields will be updated.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContactInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Contact created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": { "$ref": "#/components/schemas/Contact" },
+                    "created": { "type": "boolean", "example": true },
+                    "updated": { "type": "boolean", "example": false }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Existing contact updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": { "$ref": "#/components/schemas/Contact" },
+                    "created": { "type": "boolean", "example": false },
+                    "updated": { "type": "boolean", "example": true }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing email", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/contacts/bulk": {
+      "post": {
+        "tags": ["Contacts"],
+        "summary": "Bulk add/update contacts",
+        "description": "Add or update multiple contacts at once. Existing contacts (matched by email) are updated with non-empty fields.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["contacts"],
+                "properties": {
+                  "contacts": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/ContactInput" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk import results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": { "type": "integer", "example": 5 },
+                    "updated": { "type": "integer", "example": 2 },
+                    "errors": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/contacts/{contact_id}": {
+      "get": {
+        "tags": ["Contacts"],
+        "summary": "Get a contact",
+        "description": "Get a single contact's details along with their sequence enrollments.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "contact_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact with enrollments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": { "$ref": "#/components/schemas/Contact" },
+                    "sequences": { "type": "array", "items": { "$ref": "#/components/schemas/Enrollment" } }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Contact not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/contacts/{contact_id}/sequences": {
+      "get": {
+        "tags": ["Contacts"],
+        "summary": "Check sequence enrollments",
+        "description": "See all sequences a contact is enrolled in, their current step, and status.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "contact_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Enrollment list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": { "$ref": "#/components/schemas/Contact" },
+                    "sequences": { "type": "array", "items": { "$ref": "#/components/schemas/Enrollment" } }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Contact not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/contacts/{contact_id}/sequences/{sequence_id}/stop": {
+      "post": {
+        "tags": ["Contacts"],
+        "summary": "Stop a sequence",
+        "description": "Stop a contact's active sequence enrollment.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "contact_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "sequence_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sequence stopped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "stopped": { "type": "boolean", "example": true },
+                    "contact_id": { "type": "integer" },
+                    "sequence_id": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Enrollment not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/sequences": {
+      "get": {
+        "tags": ["Sequences"],
+        "summary": "List sequences",
+        "description": "Get all sequences with their step counts and active enrollment counts.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Sequence list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sequences": { "type": "array", "items": { "$ref": "#/components/schemas/Sequence" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}": {
+      "get": {
+        "tags": ["Sequences"],
+        "summary": "Get sequence details",
+        "description": "Get a sequence's details including all steps and current enrollments.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "sequence_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sequence with steps and enrollments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sequence": { "$ref": "#/components/schemas/Sequence" },
+                    "steps": { "type": "array", "items": { "$ref": "#/components/schemas/SequenceStep" } },
+                    "enrollments": { "type": "array", "items": { "$ref": "#/components/schemas/Enrollment" } }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Sequence not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/enroll": {
+      "post": {
+        "tags": ["Sequences"],
+        "summary": "Enroll a contact",
+        "description": "Enroll a contact into a sequence. Provide either contact_id or email. If the contact was previously stopped/completed, they will be re-enrolled.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "sequence_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contact_id": { "type": "integer", "example": 1 },
+                  "email": { "type": "string", "example": "jane@example.com" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Contact enrolled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enrolled": { "type": "boolean", "example": true },
+                    "contact_id": { "type": "integer" },
+                    "sequence_id": { "type": "integer" },
+                    "re_enrolled": { "type": "boolean", "example": false }
+                  }
+                }
+              }
+            }
+          },
+          "409": { "description": "Already enrolled and active", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "Sequence or contact not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/enroll/bulk": {
+      "post": {
+        "tags": ["Sequences"],
+        "summary": "Bulk enroll contacts",
+        "description": "Enroll multiple contacts into a sequence at once. Already-active enrollments are skipped.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "sequence_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["contact_ids"],
+                "properties": {
+                  "contact_ids": {
+                    "type": "array",
+                    "items": { "type": "integer" },
+                    "example": [1, 2, 3]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk enrollment results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enrolled": { "type": "integer", "example": 3 },
+                    "skipped": { "type": "integer", "example": 1 }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Sequence not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    }
+  }
+}
