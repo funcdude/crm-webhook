@@ -15,13 +15,17 @@ import hashlib
 import io
 from functools import wraps
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_db, init_db, dict_from_row
 
 from flask_swagger_ui import get_swaggerui_blueprint
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 SWAGGER_URL = '/api/docs'
 API_URL = '/static/swagger.json'
@@ -48,6 +52,100 @@ if RESEND_API_KEY:
 
 # Initialize database on startup
 init_db()
+
+# ============== Authentication ==============
+
+PUBLIC_ENDPOINTS = {'login', 'register', 'health', 'receive_webhook', 'static',
+                    'api_list_contacts', 'api_add_contact', 'api_add_contacts_bulk',
+                    'api_get_contact', 'api_list_sequences', 'api_get_sequence',
+                    'api_enroll_contact', 'api_enroll_bulk', 'api_contact_sequences',
+                    'api_stop_sequence', 'swagger_ui.show'}
+
+def validate_password(password):
+    errors = []
+    if len(password) < 12:
+        errors.append("At least 12 characters")
+    if not re.search(r'[A-Z]', password):
+        errors.append("At least 1 uppercase letter")
+    if not re.search(r'[a-z]', password):
+        errors.append("At least 1 lowercase letter")
+    if not re.search(r'[0-9]', password):
+        errors.append("At least 1 number")
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':\"\\|,.<>/?~`]', password):
+        errors.append("At least 1 special character")
+    return errors
+
+@app.before_request
+def require_login():
+    if request.endpoint is None:
+        return
+    if request.endpoint in PUBLIC_ENDPOINTS:
+        return
+    if request.endpoint.startswith('swagger_ui'):
+        return
+    if request.path.startswith('/static/'):
+        return
+    if request.path == '/webhook':
+        return
+    if request.path.startswith('/api/'):
+        return
+    if not session.get('user_id'):
+        return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if session.get('user_id'):
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        if not email or not password:
+            flash('Email and password are required', 'error')
+            return render_template('login.html')
+        with get_db() as conn:
+            user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if user and check_password_hash(user['password_hash'], password):
+            session['user_id'] = user['id']
+            session['user_email'] = user['email']
+            session.permanent = True
+            return redirect(url_for('index'))
+        flash('Invalid email or password', 'error')
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if session.get('user_id'):
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        confirm = request.form.get('confirm_password', '')
+        if not email or not password:
+            flash('All fields are required', 'error')
+            return render_template('register.html')
+        if password != confirm:
+            flash('Passwords do not match', 'error')
+            return render_template('register.html')
+        pw_errors = validate_password(password)
+        if pw_errors:
+            flash('Password requirements: ' + ', '.join(pw_errors), 'error')
+            return render_template('register.html')
+        with get_db() as conn:
+            existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            if existing:
+                flash('An account with this email already exists', 'error')
+                return render_template('register.html')
+            conn.execute("INSERT INTO users (email, password_hash) VALUES (?, ?)",
+                         (email, generate_password_hash(password)))
+        flash('Account created — please log in', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Logged out', 'success')
+    return redirect(url_for('login'))
 
 # ============== Helper Functions ==============
 

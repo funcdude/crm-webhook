@@ -99,6 +99,14 @@ CREATE TABLE IF NOT EXISTS email_templates (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Users for web app authentication
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
 CREATE INDEX IF NOT EXISTS idx_contact_sequences_status ON contact_sequences(status);

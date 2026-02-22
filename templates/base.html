@@ -41,6 +41,10 @@
                         </a>
                     </div>
                 </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-500 mr-3">{{ session.get('user_email', '') }}</span>
+                    <a href="/logout" class="text-sm text-red-600 hover:text-red-800 font-medium">Logout</a>
+                </div>
             </div>
         </div>
     </nav>
