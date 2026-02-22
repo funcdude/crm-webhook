@@ -1,4 +1,4 @@
-# SimpleCRM — MVP v0.4
+# SimpleCRM — MVP v0.5
 
 ## Overview
 
@@ -49,6 +49,14 @@ Preferred communication style: Simple, everyday language.
 - **Auto-stop**: When a reply or bounce is detected, the contact's sequence is automatically paused/stopped
 - **Security**: Optional HMAC signature verification via `RESEND_WEBHOOK_SECRET`
 
+### Web Authentication
+- **User accounts**: Email/password authentication stored in `users` table
+- **Password hashing**: `werkzeug.security` (pbkdf2:sha256) for password storage
+- **Password policy**: Min 12 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
+- **Session management**: Flask sessions with 7-day lifetime, httponly cookies, SameSite=Lax
+- **Route protection**: `before_request` hook redirects unauthenticated users to `/login`; API endpoints (`/api/*`), webhooks (`/webhook`), static files, and Swagger docs are exempt
+- **Pages**: Login (`/login`), Register (`/register`), Logout (`/logout`)
+
 ### Configuration
 All configuration is via environment variables (Replit Secrets):
 - `RESEND_API_KEY` - Resend API key for sending emails
@@ -91,12 +99,14 @@ See `bot_example.py` for a complete Python example showing how to use these endp
 - **Hunter.io** - Not directly integrated via API, but the CSV import is designed to accept various CSV formats including Hunter.io exports. Supports flexible column mapping (Name, Work Email, Personal Email, Company, Title, etc.)
 
 ## Version History
+- **MVP v0.5** (2026-02-22): Web UI authentication — email/password login/register with strong password policy, secure sessions, route protection
 - **MVP v0.4** (2026-02-22): REST API with key authentication for bot integration — contacts CRUD, sequence enrollment, status checks
 - **MVP v0.3** (2026-02-19): Test Sequence Runner, inline editing for contacts & templates, column sorting, nav highlight fixes
 - **MVP v0.2** (2026-02-17): Email templates, improved CSV import, Resend integration verified
 - **MVP v0.1**: Initial CRM with contacts, sequences, send queue, webhooks, stats
 
 ## Recent Changes
+- 2026-02-22: Added web UI authentication — email/password login and registration with password hashing, strong password validation (12+ chars, mixed case, number, special char), 7-day sessions with httponly cookies, nav bar shows logged-in user email and logout link.
 - 2026-02-22: Added REST API with Bearer token authentication for bot integration. Endpoints for contacts (list, add, bulk add), sequences (list, detail, enroll, bulk enroll, stop), and status checks. Example bot script at `bot_example.py`.
 - 2026-02-19: Added Test Sequence Runner page — preview personalized emails for any sequence + contact combination, and send test emails with [TEST] prefix. Server-side content generation for security.
 - 2026-02-17: Verified Resend email sending works end-to-end (test email sent successfully)
