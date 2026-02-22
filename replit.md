@@ -1,4 +1,4 @@
-# SimpleCRM — MVP v0.3
+# SimpleCRM — MVP v0.4
 
 ## Overview
 
@@ -58,6 +58,26 @@ All configuration is via environment variables (Replit Secrets):
 - `WEBHOOK_API_KEY` - Optional API key for webhook endpoint
 - `RESEND_WEBHOOK_SECRET` - Optional HMAC secret for webhook verification
 - `DB_PATH` - SQLite database file path (defaults to `crm.db`)
+- `CRM_API_KEY` - Shared API key for bot/external access to the REST API
+
+### REST API for Bot Integration
+All API endpoints (except `/api/health`) require `Authorization: Bearer <CRM_API_KEY>` header.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/health` | GET | Health check (no auth needed) |
+| `/api/contacts` | GET | List contacts (supports `search`, `tag`, `limit`, `offset` params) |
+| `/api/contacts` | POST | Add/update a single contact (JSON body with `email` required) |
+| `/api/contacts/bulk` | POST | Add/update multiple contacts (JSON body with `contacts` array) |
+| `/api/contacts/<id>` | GET | Get a single contact with their sequence enrollments |
+| `/api/contacts/<id>/sequences` | GET | Check all sequence enrollments for a contact |
+| `/api/contacts/<id>/sequences/<seq_id>/stop` | POST | Stop a contact's active sequence |
+| `/api/sequences` | GET | List all sequences with step counts and enrollment counts |
+| `/api/sequences/<id>` | GET | Get sequence details with steps and enrollments |
+| `/api/sequences/<id>/enroll` | POST | Enroll a contact (JSON: `contact_id` or `email`) |
+| `/api/sequences/<id>/enroll/bulk` | POST | Enroll multiple contacts (JSON: `contact_ids` array) |
+
+See `bot_example.py` for a complete Python example showing how to use these endpoints.
 
 ## External Dependencies
 
@@ -71,11 +91,13 @@ All configuration is via environment variables (Replit Secrets):
 - **Hunter.io** - Not directly integrated via API, but the CSV import is designed to accept various CSV formats including Hunter.io exports. Supports flexible column mapping (Name, Work Email, Personal Email, Company, Title, etc.)
 
 ## Version History
+- **MVP v0.4** (2026-02-22): REST API with key authentication for bot integration — contacts CRUD, sequence enrollment, status checks
 - **MVP v0.3** (2026-02-19): Test Sequence Runner, inline editing for contacts & templates, column sorting, nav highlight fixes
 - **MVP v0.2** (2026-02-17): Email templates, improved CSV import, Resend integration verified
 - **MVP v0.1**: Initial CRM with contacts, sequences, send queue, webhooks, stats
 
 ## Recent Changes
+- 2026-02-22: Added REST API with Bearer token authentication for bot integration. Endpoints for contacts (list, add, bulk add), sequences (list, detail, enroll, bulk enroll, stop), and status checks. Example bot script at `bot_example.py`.
 - 2026-02-19: Added Test Sequence Runner page — preview personalized emails for any sequence + contact combination, and send test emails with [TEST] prefix. Server-side content generation for security.
 - 2026-02-17: Verified Resend email sending works end-to-end (test email sent successfully)
 - 2026-02-17: Added email templates feature - reusable templates that can be created manually or imported from JSON files, then applied to sequence steps via a dropdown picker. JSON import auto-converts personalized emails into templates with {first_name}, {company} placeholders.
