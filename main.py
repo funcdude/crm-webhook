@@ -13,6 +13,7 @@ import json
 import hmac
 import hashlib
 import io
+from functools import wraps
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from db import get_db, init_db, dict_from_row
@@ -26,6 +27,7 @@ FROM_EMAIL = os.environ.get('FROM_EMAIL', 'Oskar Hurme <oskar@oskarhurme.com>')
 REPLY_TO = os.environ.get('REPLY_TO', 'oskar@oskarhurme.com')
 WEBHOOK_API_KEY = os.environ.get('WEBHOOK_API_KEY', '')
 RESEND_WEBHOOK_SECRET = os.environ.get('RESEND_WEBHOOK_SECRET', '')
+CRM_API_KEY = os.environ.get('CRM_API_KEY', '')
 
 # Initialize Resend if available
 resend = None
@@ -816,16 +818,335 @@ def receive_webhook():
         print(f"Webhook error: {e}")
         return jsonify({'error': str(e)}), 500
 
+# ============== API Authentication ==============
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not CRM_API_KEY:
+            return jsonify({'error': 'API access not configured. Set CRM_API_KEY in environment.'}), 503
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            token = auth[7:]
+        else:
+            token = request.headers.get('X-API-Key', '')
+        if not token or not hmac.compare_digest(token, CRM_API_KEY):
+            return jsonify({'error': 'Invalid or missing API key'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
 # ============== API Endpoints ==============
 
 @app.route('/api/health')
 def health():
-    """Health check endpoint."""
     return jsonify({
         'status': 'ok',
+        'api_configured': bool(CRM_API_KEY),
         'resend_configured': bool(RESEND_API_KEY),
         'timestamp': datetime.now().isoformat()
     })
+
+@app.route('/api/contacts', methods=['GET'])
+@require_api_key
+def api_list_contacts():
+    tag = request.args.get('tag', '').strip()
+    search = request.args.get('search', '').strip()
+    limit = request.args.get('limit', 100, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    
+    with get_db() as conn:
+        query = "SELECT * FROM contacts"
+        params = []
+        conditions = []
+        if tag:
+            conditions.append("tags LIKE ?")
+            params.append(f"%{tag}%")
+        if search:
+            conditions.append("(email LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR company LIKE ?)")
+            params.extend([f"%{search}%"] * 4)
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        rows = conn.execute(query, params).fetchall()
+        total = conn.execute(
+            "SELECT COUNT(*) FROM contacts" + (" WHERE " + " AND ".join(conditions) if conditions else ""),
+            params[:-2] if conditions else []
+        ).fetchone()[0]
+    
+    return jsonify({
+        'contacts': [dict(r) for r in rows],
+        'total': total,
+        'limit': limit,
+        'offset': offset
+    })
+
+@app.route('/api/contacts', methods=['POST'])
+@require_api_key
+def api_add_contact():
+    data = request.get_json()
+    if not data or not data.get('email'):
+        return jsonify({'error': 'email is required'}), 400
+    
+    email = data['email'].strip().lower()
+    first_name = data.get('first_name', '').strip()
+    last_name = data.get('last_name', '').strip()
+    company = data.get('company', '').strip()
+    title = data.get('title', '').strip()
+    source = data.get('source', 'api').strip()
+    tags = data.get('tags', '').strip()
+    
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM contacts WHERE email = ?", (email,)).fetchone()
+        if existing:
+            conn.execute("""
+                UPDATE contacts SET 
+                    first_name=COALESCE(NULLIF(?,''), first_name),
+                    last_name=COALESCE(NULLIF(?,''), last_name),
+                    company=COALESCE(NULLIF(?,''), company),
+                    title=COALESCE(NULLIF(?,''), title),
+                    tags=CASE WHEN ? != '' THEN ? ELSE tags END,
+                    updated_at=datetime('now')
+                WHERE id=?
+            """, (first_name, last_name, company, title, tags, tags, existing['id']))
+            contact = conn.execute("SELECT * FROM contacts WHERE id=?", (existing['id'],)).fetchone()
+            return jsonify({'contact': dict(contact), 'created': False, 'updated': True})
+        else:
+            conn.execute("""
+                INSERT INTO contacts (email, first_name, last_name, company, title, source, tags)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (email, first_name, last_name, company, title, source, tags))
+            contact = conn.execute("SELECT * FROM contacts WHERE email=?", (email,)).fetchone()
+            return jsonify({'contact': dict(contact), 'created': True, 'updated': False}), 201
+
+@app.route('/api/contacts/bulk', methods=['POST'])
+@require_api_key
+def api_add_contacts_bulk():
+    data = request.get_json()
+    if not data or not isinstance(data.get('contacts'), list):
+        return jsonify({'error': 'contacts array is required'}), 400
+    
+    created = 0
+    updated = 0
+    errors = []
+    
+    with get_db() as conn:
+        for i, c in enumerate(data['contacts']):
+            email = (c.get('email') or '').strip().lower()
+            if not email:
+                errors.append(f"Row {i}: missing email")
+                continue
+            try:
+                existing = conn.execute("SELECT id FROM contacts WHERE email = ?", (email,)).fetchone()
+                if existing:
+                    conn.execute("""
+                        UPDATE contacts SET 
+                            first_name=COALESCE(NULLIF(?,''), first_name),
+                            last_name=COALESCE(NULLIF(?,''), last_name),
+                            company=COALESCE(NULLIF(?,''), company),
+                            title=COALESCE(NULLIF(?,''), title),
+                            source=COALESCE(NULLIF(?,''), source),
+                            updated_at=datetime('now')
+                        WHERE id=?
+                    """, (c.get('first_name',''), c.get('last_name',''), c.get('company',''), 
+                          c.get('title',''), c.get('source',''), existing['id']))
+                    updated += 1
+                else:
+                    conn.execute("""
+                        INSERT INTO contacts (email, first_name, last_name, company, title, source, tags)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (email, c.get('first_name',''), c.get('last_name',''), c.get('company',''),
+                          c.get('title',''), c.get('source','api'), c.get('tags','')))
+                    created += 1
+            except Exception as e:
+                errors.append(f"Row {i} ({email}): {e}")
+    
+    return jsonify({'created': created, 'updated': updated, 'errors': errors})
+
+@app.route('/api/contacts/<int:contact_id>', methods=['GET'])
+@require_api_key
+def api_get_contact(contact_id):
+    with get_db() as conn:
+        contact = conn.execute("SELECT * FROM contacts WHERE id=?", (contact_id,)).fetchone()
+        if not contact:
+            return jsonify({'error': 'Contact not found'}), 404
+        
+        enrollments = conn.execute("""
+            SELECT cs.*, s.name as sequence_name 
+            FROM contact_sequences cs
+            JOIN sequences s ON s.id = cs.sequence_id
+            WHERE cs.contact_id = ?
+        """, (contact_id,)).fetchall()
+    
+    return jsonify({
+        'contact': dict(contact),
+        'sequences': [dict(e) for e in enrollments]
+    })
+
+@app.route('/api/sequences', methods=['GET'])
+@require_api_key
+def api_list_sequences():
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT s.*, COUNT(ss.id) as step_count,
+                   COUNT(DISTINCT cs.contact_id) as enrolled_contacts
+            FROM sequences s
+            LEFT JOIN sequence_steps ss ON ss.sequence_id = s.id
+            LEFT JOIN contact_sequences cs ON cs.sequence_id = s.id AND cs.status = 'active'
+            GROUP BY s.id ORDER BY s.name
+        """).fetchall()
+    return jsonify({'sequences': [dict(r) for r in rows]})
+
+@app.route('/api/sequences/<int:sequence_id>', methods=['GET'])
+@require_api_key
+def api_get_sequence(sequence_id):
+    with get_db() as conn:
+        seq = conn.execute("SELECT * FROM sequences WHERE id=?", (sequence_id,)).fetchone()
+        if not seq:
+            return jsonify({'error': 'Sequence not found'}), 404
+        steps = conn.execute("""
+            SELECT * FROM sequence_steps WHERE sequence_id=? ORDER BY step_number
+        """, (sequence_id,)).fetchall()
+        enrollments = conn.execute("""
+            SELECT cs.*, c.email, c.first_name, c.last_name
+            FROM contact_sequences cs
+            JOIN contacts c ON c.id = cs.contact_id
+            WHERE cs.sequence_id = ?
+        """, (sequence_id,)).fetchall()
+    
+    return jsonify({
+        'sequence': dict(seq),
+        'steps': [dict(s) for s in steps],
+        'enrollments': [dict(e) for e in enrollments]
+    })
+
+@app.route('/api/sequences/<int:sequence_id>/enroll', methods=['POST'])
+@require_api_key
+def api_enroll_contact(sequence_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Request body required'}), 400
+    
+    contact_id = data.get('contact_id')
+    contact_email = data.get('email', '').strip().lower()
+    
+    with get_db() as conn:
+        seq = conn.execute("SELECT id FROM sequences WHERE id=?", (sequence_id,)).fetchone()
+        if not seq:
+            return jsonify({'error': 'Sequence not found'}), 404
+        
+        if contact_email and not contact_id:
+            contact = conn.execute("SELECT id FROM contacts WHERE email=?", (contact_email,)).fetchone()
+            if not contact:
+                return jsonify({'error': f'Contact with email {contact_email} not found'}), 404
+            contact_id = contact['id']
+        
+        if not contact_id:
+            return jsonify({'error': 'contact_id or email is required'}), 400
+        
+        contact = conn.execute("SELECT id, email FROM contacts WHERE id=?", (contact_id,)).fetchone()
+        if not contact:
+            return jsonify({'error': 'Contact not found'}), 404
+        
+        existing = conn.execute("""
+            SELECT id, status FROM contact_sequences 
+            WHERE contact_id=? AND sequence_id=?
+        """, (contact_id, sequence_id)).fetchone()
+        
+        if existing:
+            if existing['status'] == 'active':
+                return jsonify({'error': 'Contact is already enrolled and active in this sequence'}), 409
+            conn.execute("""
+                UPDATE contact_sequences 
+                SET status='active', current_step=0, started_at=datetime('now'),
+                    next_send_at=datetime('now'), updated_at=datetime('now')
+                WHERE id=?
+            """, (existing['id'],))
+            return jsonify({'enrolled': True, 're_enrolled': True, 'contact_id': contact_id, 'sequence_id': sequence_id})
+        
+        conn.execute("""
+            INSERT INTO contact_sequences (contact_id, sequence_id, status, current_step, next_send_at)
+            VALUES (?, ?, 'active', 0, datetime('now'))
+        """, (contact_id, sequence_id))
+    
+    return jsonify({'enrolled': True, 'contact_id': contact_id, 'sequence_id': sequence_id}), 201
+
+@app.route('/api/sequences/<int:sequence_id>/enroll/bulk', methods=['POST'])
+@require_api_key
+def api_enroll_bulk(sequence_id):
+    data = request.get_json()
+    if not data or not isinstance(data.get('contact_ids'), list):
+        return jsonify({'error': 'contact_ids array is required'}), 400
+    
+    with get_db() as conn:
+        seq = conn.execute("SELECT id FROM sequences WHERE id=?", (sequence_id,)).fetchone()
+        if not seq:
+            return jsonify({'error': 'Sequence not found'}), 404
+        
+        enrolled = 0
+        skipped = 0
+        for cid in data['contact_ids']:
+            existing = conn.execute("""
+                SELECT status FROM contact_sequences WHERE contact_id=? AND sequence_id=?
+            """, (cid, sequence_id)).fetchone()
+            if existing and existing['status'] == 'active':
+                skipped += 1
+                continue
+            if existing:
+                conn.execute("""
+                    UPDATE contact_sequences 
+                    SET status='active', current_step=0, started_at=datetime('now'),
+                        next_send_at=datetime('now'), updated_at=datetime('now')
+                    WHERE contact_id=? AND sequence_id=?
+                """, (cid, sequence_id))
+            else:
+                conn.execute("""
+                    INSERT INTO contact_sequences (contact_id, sequence_id, status, current_step, next_send_at)
+                    VALUES (?, ?, 'active', 0, datetime('now'))
+                """, (cid, sequence_id))
+            enrolled += 1
+    
+    return jsonify({'enrolled': enrolled, 'skipped': skipped})
+
+@app.route('/api/contacts/<int:contact_id>/sequences', methods=['GET'])
+@require_api_key
+def api_contact_sequences(contact_id):
+    with get_db() as conn:
+        contact = conn.execute("SELECT * FROM contacts WHERE id=?", (contact_id,)).fetchone()
+        if not contact:
+            return jsonify({'error': 'Contact not found'}), 404
+        
+        enrollments = conn.execute("""
+            SELECT cs.*, s.name as sequence_name,
+                   (SELECT COUNT(*) FROM sequence_steps WHERE sequence_id = cs.sequence_id) as total_steps
+            FROM contact_sequences cs
+            JOIN sequences s ON s.id = cs.sequence_id
+            WHERE cs.contact_id = ?
+        """, (contact_id,)).fetchall()
+    
+    return jsonify({
+        'contact': dict(contact),
+        'sequences': [dict(e) for e in enrollments]
+    })
+
+@app.route('/api/contacts/<int:contact_id>/sequences/<int:sequence_id>/stop', methods=['POST'])
+@require_api_key
+def api_stop_sequence(contact_id, sequence_id):
+    with get_db() as conn:
+        enrollment = conn.execute("""
+            SELECT id, status FROM contact_sequences 
+            WHERE contact_id=? AND sequence_id=?
+        """, (contact_id, sequence_id)).fetchone()
+        
+        if not enrollment:
+            return jsonify({'error': 'Enrollment not found'}), 404
+        
+        conn.execute("""
+            UPDATE contact_sequences SET status='stopped', updated_at=datetime('now')
+            WHERE id=?
+        """, (enrollment['id'],))
+    
+    return jsonify({'stopped': True, 'contact_id': contact_id, 'sequence_id': sequence_id})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
