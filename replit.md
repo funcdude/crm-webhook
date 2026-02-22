@@ -1,4 +1,4 @@
-# SimpleCRM — MVP v0.5
+# SimpleCRM — MVP v0.6
 
 ## Overview
 
@@ -22,12 +22,14 @@ Preferred communication style: Simple, everyday language.
 - **Storage**: Single SQLite file (`crm.db`) managed through `db.py`
 - **Schema**: Defined as raw SQL in `db.py` with `CREATE TABLE IF NOT EXISTS` for auto-initialization
 - **Tables**:
-  - `contacts` - Imported contacts with email, name, company, title, tags, source
-  - `sequences` - Named multi-step email campaigns
+  - `contacts` - Imported contacts with email, name, company, title, tags, source (scoped by `user_id`)
+  - `sequences` - Named multi-step email campaigns (scoped by `user_id`)
   - `sequence_steps` - Individual steps within a sequence (step number, delay days, subject, body template)
   - `contact_sequences` - Junction table tracking which contacts are enrolled in which sequences, their current step, and status
   - `sent_emails` - Log of all sent emails with Resend message IDs for webhook correlation
-  - `email_templates` - Reusable email templates with template types
+  - `email_templates` - Reusable email templates with template types (scoped by `user_id`)
+  - `users` - User accounts with `is_api_owner` flag for API key association
+- **Multi-tenancy**: All data tables (contacts, sequences, email_templates) have a `user_id` column. Each user only sees their own data. Migration in `db.py` handles upgrading old single-tenant databases.
 - **Access pattern**: Context manager (`get_db`) for connections, `dict_from_row` helper for converting rows to dictionaries
 - **Note**: If migrating to Postgres via Drizzle later, the schema is straightforward relational with no SQLite-specific features beyond the file-based storage
 
@@ -49,12 +51,14 @@ Preferred communication style: Simple, everyday language.
 - **Auto-stop**: When a reply or bounce is detected, the contact's sequence is automatically paused/stopped
 - **Security**: Optional HMAC signature verification via `RESEND_WEBHOOK_SECRET`
 
-### Web Authentication
+### Web Authentication & Multi-Tenancy
 - **User accounts**: Email/password authentication stored in `users` table
 - **Password hashing**: `werkzeug.security` (pbkdf2:sha256) for password storage
 - **Password policy**: Min 12 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
 - **Session management**: Flask sessions with 7-day lifetime, httponly cookies, SameSite=Lax
 - **Route protection**: `before_request` hook redirects unauthenticated users to `/login`; API endpoints (`/api/*`), webhooks (`/webhook`), static files, and Swagger docs are exempt
+- **Data isolation**: Each user only sees their own contacts, sequences, and templates. New users start with an empty CRM.
+- **API owner**: The user `oskar.hurme@gmail.com` is marked as `is_api_owner=1` in the users table. The CRM_API_KEY maps to this user's data.
 - **Pages**: Login (`/login`), Register (`/register`), Logout (`/logout`)
 
 ### Configuration
@@ -99,6 +103,7 @@ See `bot_example.py` for a complete Python example showing how to use these endp
 - **Hunter.io** - Not directly integrated via API, but the CSV import is designed to accept various CSV formats including Hunter.io exports. Supports flexible column mapping (Name, Work Email, Personal Email, Company, Title, etc.)
 
 ## Version History
+- **MVP v0.6** (2026-02-22): Multi-tenancy — per-user data isolation, API key mapped to owner account, new users see empty CRM
 - **MVP v0.5** (2026-02-22): Web UI authentication — email/password login/register with strong password policy, secure sessions, route protection
 - **MVP v0.4** (2026-02-22): REST API with key authentication for bot integration — contacts CRUD, sequence enrollment, status checks
 - **MVP v0.3** (2026-02-19): Test Sequence Runner, inline editing for contacts & templates, column sorting, nav highlight fixes
@@ -106,6 +111,7 @@ See `bot_example.py` for a complete Python example showing how to use these endp
 - **MVP v0.1**: Initial CRM with contacts, sequences, send queue, webhooks, stats
 
 ## Recent Changes
+- 2026-02-22: Added multi-tenancy — contacts, sequences, and templates are now scoped per user. Existing data is assigned to oskar.hurme@gmail.com on migration. API key (CRM_API_KEY) is linked to the owner user's data. New users registering see a completely empty CRM.
 - 2026-02-22: Added web UI authentication — email/password login and registration with password hashing, strong password validation (12+ chars, mixed case, number, special char), 7-day sessions with httponly cookies, nav bar shows logged-in user email and logout link.
 - 2026-02-22: Added REST API with Bearer token authentication for bot integration. Endpoints for contacts (list, add, bulk add), sequences (list, detail, enroll, bulk enroll, stop), and status checks. Example bot script at `bot_example.py`.
 - 2026-02-19: Added Test Sequence Runner page — preview personalized emails for any sequence + contact combination, and send test emails with [TEST] prefix. Server-side content generation for security.
