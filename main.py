@@ -823,7 +823,7 @@ def test_sequence():
         
         if selected_seq and selected_contact:
             contact_row = conn.execute(
-                "SELECT * FROM contacts WHERE id = ?", (selected_contact,)
+                "SELECT * FROM contacts WHERE id = ? AND user_id = ?", (selected_contact, uid)
             ).fetchone()
             if contact_row:
                 contact_data = dict(contact_row)
@@ -865,8 +865,9 @@ def test_send_email():
         flash('Missing email details', 'error')
         return redirect(url_for('test_sequence'))
     
+    uid = get_current_user_id()
     with get_db() as conn:
-        contact_row = conn.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+        contact_row = conn.execute("SELECT * FROM contacts WHERE id = ? AND user_id = ?", (contact_id, uid)).fetchone()
         step_row = conn.execute("""
             SELECT * FROM sequence_steps WHERE sequence_id = ? AND step_number = ?
         """, (seq_id, step_num)).fetchone()
@@ -1066,7 +1067,7 @@ def api_add_contact():
                     updated_at=datetime('now')
                 WHERE id=?
             """, (first_name, last_name, company, title, tags, tags, existing['id']))
-            contact = conn.execute("SELECT * FROM contacts WHERE id=?", (existing['id'],)).fetchone()
+            contact = conn.execute("SELECT * FROM contacts WHERE id=? AND user_id=?", (existing['id'], uid)).fetchone()
             return jsonify({'contact': dict(contact), 'created': False, 'updated': True})
         else:
             conn.execute("""

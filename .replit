@@ -5,7 +5,8 @@ modules = ["python-3.11"]
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "gunicorn main:app --bind 0.0.0.0:5000"]
+run = ["gunicorn", "--bind=0.0.0.0:5000", "--reuse-port", "main:app"]
+deploymentTarget = "autoscale"
 
 [agent]
 expertMode = true
