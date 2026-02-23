@@ -235,16 +235,17 @@ def migrate_owner_data(conn):
 
 def init_db():
     """Initialize the database with schema and run migrations."""
+    import sys
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, is_api_owner INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
 
-        needs_full_schema = not _column_exists(conn, 'contacts', 'user_id') if table_exists(conn, 'contacts') else True
-
         if table_exists(conn, 'contacts') and not _column_exists(conn, 'contacts', 'user_id'):
+            print("[DB] Running multi-tenancy migration...", file=sys.stderr)
             _migrate_add_user_id(conn)
             conn.commit()
+            print("[DB] Migration complete", file=sys.stderr)
         else:
             conn.executescript(SCHEMA)
 
@@ -253,6 +254,13 @@ def init_db():
 
         migrate_owner_data(conn)
         conn.commit()
+
+        user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        contact_count = conn.execute("SELECT COUNT(*) FROM contacts").fetchone()[0]
+        print(f"[DB] Initialized: {user_count} users, {contact_count} contacts", file=sys.stderr)
+    except Exception as e:
+        print(f"[DB] ERROR during init: {e}", file=sys.stderr)
+        raise
     finally:
         conn.close()
     print(f"Database initialized at {DB_PATH}")
