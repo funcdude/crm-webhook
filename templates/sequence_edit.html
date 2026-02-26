@@ -123,9 +123,30 @@
             <div class="p-4">
                 <form method="POST" action="/sequences/{{ sequence.id }}/enroll">
                     <div class="mb-3">
-                        <label class="block text-sm text-gray-500 mb-1">By Tag</label>
-                        <input type="text" name="tag" placeholder="e.g., founders"
-                            class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                        <label class="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Filter by</label>
+                        <div class="space-y-2">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-0.5">Tag</label>
+                                <input type="text" name="tag" placeholder="e.g., founders"
+                                    class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-0.5">Name</label>
+                                <input type="text" name="name" placeholder="e.g., John"
+                                    class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-0.5">Company</label>
+                                <input type="text" name="company" placeholder="e.g., Acme Inc"
+                                    class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-0.5">Title</label>
+                                <input type="text" name="title" placeholder="e.g., CEO"
+                                    class="block w-full rounded-md border-gray-300 shadow-sm text-sm p-2 border">
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2">Fill one or more fields. All filled fields must match.</p>
                     </div>
                     <button type="submit" class="w-full bg-green-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-green-700">
                         Enroll Contacts

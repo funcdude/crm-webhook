@@ -472,21 +472,43 @@ def enroll_contacts(seq_id):
     """Enroll contacts in a sequence."""
     uid = get_current_user_id()
     tag = request.form.get('tag', '').strip()
+    name = request.form.get('name', '').strip()
+    company = request.form.get('company', '').strip()
+    title = request.form.get('title', '').strip()
     
     with get_db() as conn:
         seq = conn.execute("SELECT id FROM sequences WHERE id = ? AND user_id = ?", (seq_id, uid)).fetchone()
         if not seq:
             flash('Sequence not found', 'error')
             return redirect(url_for('sequences'))
-        if tag:
+        
+        has_filters = tag or name or company or title
+        if has_filters:
+            conditions = ["user_id = ?"]
+            params = [uid]
+            if tag:
+                conditions.append("tags LIKE ?")
+                params.append(f"%{tag}%")
+            if name:
+                conditions.append("(first_name LIKE ? OR last_name LIKE ?)")
+                params.extend([f"%{name}%", f"%{name}%"])
+            if company:
+                conditions.append("company LIKE ?")
+                params.append(f"%{company}%")
+            if title:
+                conditions.append("title LIKE ?")
+                params.append(f"%{title}%")
             contacts = conn.execute(
-                "SELECT id, email FROM contacts WHERE user_id = ? AND tags LIKE ?",
-                (uid, f"%{tag}%")
+                f"SELECT id, email FROM contacts WHERE {' AND '.join(conditions)}",
+                params
             ).fetchall()
+            if not contacts:
+                flash('No contacts matched the filters', 'error')
+                return redirect(url_for('edit_sequence', seq_id=seq_id))
         else:
             contact_ids = request.form.getlist('contact_ids')
             if not contact_ids:
-                flash('No contacts selected', 'error')
+                flash('Please fill at least one filter field', 'error')
                 return redirect(url_for('edit_sequence', seq_id=seq_id))
             contacts = conn.execute(
                 f"SELECT id, email FROM contacts WHERE user_id = ? AND id IN ({','.join('?' * len(contact_ids))})",
