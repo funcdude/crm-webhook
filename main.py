@@ -72,7 +72,7 @@ def validate_password(password):
         errors.append("At least 1 lowercase letter")
     if not re.search(r'[0-9]', password):
         errors.append("At least 1 number")
-    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':\"\\|,.<>/?~`]', password):
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>/?~`]', password):
         errors.append("At least 1 special character")
     return errors
 
@@ -104,7 +104,7 @@ def login():
             flash('Email and password are required', 'error')
             return render_template('login.html')
         with get_db() as conn:
-            user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+            user = conn.execute("SELECT * FROM users WHERE email = %s", (email,)).fetchone()
         if user and check_password_hash(user['password_hash'], password):
             session['user_id'] = user['id']
             session['user_email'] = user['email']
@@ -132,12 +132,12 @@ def register():
             flash('Password requirements: ' + ', '.join(pw_errors), 'error')
             return render_template('register.html')
         with get_db() as conn:
-            existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            existing = conn.execute("SELECT id FROM users WHERE email = %s", (email,)).fetchone()
             if existing:
                 flash('An account with this email already exists', 'error')
                 return render_template('register.html')
             is_owner = 1 if email == OWNER_EMAIL else 0
-            cursor = conn.execute("INSERT INTO users (email, password_hash, is_api_owner) VALUES (?, ?, ?)",
+            cursor = conn.execute("INSERT INTO users (email, password_hash, is_api_owner) VALUES (%s, %s, %s)",
                          (email, generate_password_hash(password), is_owner))
             if email == OWNER_EMAIL:
                 from db import migrate_owner_data
@@ -191,14 +191,14 @@ def index():
     """Dashboard homepage."""
     uid = get_current_user_id()
     with get_db() as conn:
-        contact_count = conn.execute("SELECT COUNT(*) FROM contacts WHERE user_id = ?", (uid,)).fetchone()[0]
-        sequence_count = conn.execute("SELECT COUNT(*) FROM sequences WHERE user_id = ?", (uid,)).fetchone()[0]
+        contact_count = conn.execute("SELECT COUNT(*) FROM contacts WHERE user_id = %s", (uid,)).fetchone()[0]
+        sequence_count = conn.execute("SELECT COUNT(*) FROM sequences WHERE user_id = %s", (uid,)).fetchone()[0]
         active_enrollments = conn.execute(
-            "SELECT COUNT(*) FROM contact_sequences cs JOIN contacts c ON c.id = cs.contact_id WHERE cs.status = 'active' AND c.user_id = ?",
+            "SELECT COUNT(*) FROM contact_sequences cs JOIN contacts c ON c.id = cs.contact_id WHERE cs.status = 'active' AND c.user_id = %s",
             (uid,)
         ).fetchone()[0]
         emails_sent = conn.execute(
-            "SELECT COUNT(*) FROM emails_sent e JOIN contacts c ON c.id = e.contact_id WHERE c.user_id = ?",
+            "SELECT COUNT(*) FROM emails_sent e JOIN contacts c ON c.id = e.contact_id WHERE c.user_id = %s",
             (uid,)
         ).fetchone()[0]
         
@@ -206,14 +206,14 @@ def index():
             SELECT e.*, c.email as contact_email, c.first_name
             FROM emails_sent e
             JOIN contacts c ON c.id = e.contact_id
-            WHERE c.user_id = ?
+            WHERE c.user_id = %s
             ORDER BY e.sent_at DESC LIMIT 10
         """, (uid,)).fetchall()
         
         pending = conn.execute("""
             SELECT COUNT(*) FROM contact_sequences cs
             JOIN contacts c ON c.id = cs.contact_id
-            WHERE cs.status = 'active' AND cs.next_send_at <= datetime('now') AND c.user_id = ?
+            WHERE cs.status = 'active' AND cs.next_send_at <= NOW() AND c.user_id = %s
         """, (uid,)).fetchone()[0]
     
     return render_template('index.html',
@@ -238,7 +238,7 @@ def contacts():
                     (SELECT COUNT(*) FROM contact_sequences cs WHERE cs.contact_id = c.id) as sequences,
                     (SELECT COUNT(*) FROM emails_sent es WHERE es.contact_id = c.id) as emails
                 FROM contacts c
-                WHERE c.user_id = ? AND c.tags LIKE ?
+                WHERE c.user_id = %s AND c.tags LIKE %s
                 ORDER BY c.created_at DESC
             """, (uid, f"%{tag}%")).fetchall()
         else:
@@ -247,12 +247,12 @@ def contacts():
                     (SELECT COUNT(*) FROM contact_sequences cs WHERE cs.contact_id = c.id) as sequences,
                     (SELECT COUNT(*) FROM emails_sent es WHERE es.contact_id = c.id) as emails
                 FROM contacts c
-                WHERE c.user_id = ?
+                WHERE c.user_id = %s
                 ORDER BY c.created_at DESC
             """, (uid,)).fetchall()
         
         all_tags = set()
-        for row in conn.execute("SELECT tags FROM contacts WHERE user_id = ? AND tags IS NOT NULL", (uid,)):
+        for row in conn.execute("SELECT tags FROM contacts WHERE user_id = %s AND tags IS NOT NULL", (uid,)):
             if row['tags']:
                 all_tags.update(t.strip() for t in row['tags'].split(','))
     
@@ -356,35 +356,38 @@ def import_contacts():
                     email = f"no-email-{slug}-{unique_suffix}@placeholder.invalid"
                     no_email_count += 1
                 
+                sp = conn.savepoint()
                 try:
-                    existing = conn.execute("SELECT id FROM contacts WHERE email = ? AND user_id = ?", (email, uid)).fetchone()
+                    existing = conn.execute("SELECT id FROM contacts WHERE email = %s AND user_id = %s", (email, uid)).fetchone()
                     conn.execute("""
                         INSERT INTO contacts (user_id, email, first_name, last_name, company, title, 
                             phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
                             source, tags)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT(email, user_id) DO UPDATE SET
-                            first_name = COALESCE(excluded.first_name, first_name),
-                            last_name = COALESCE(excluded.last_name, last_name),
-                            company = COALESCE(excluded.company, company),
-                            title = COALESCE(excluded.title, title),
-                            phone = COALESCE(excluded.phone, phone),
-                            website = COALESCE(excluded.website, website),
-                            street_address = COALESCE(excluded.street_address, street_address),
-                            city = COALESCE(excluded.city, city),
-                            zip_code = COALESCE(excluded.zip_code, zip_code),
-                            google_rating = COALESCE(excluded.google_rating, google_rating),
-                            review_count = COALESCE(excluded.review_count, review_count),
-                            google_place_id = COALESCE(excluded.google_place_id, google_place_id),
+                            first_name = COALESCE(excluded.first_name, contacts.first_name),
+                            last_name = COALESCE(excluded.last_name, contacts.last_name),
+                            company = COALESCE(excluded.company, contacts.company),
+                            title = COALESCE(excluded.title, contacts.title),
+                            phone = COALESCE(excluded.phone, contacts.phone),
+                            website = COALESCE(excluded.website, contacts.website),
+                            street_address = COALESCE(excluded.street_address, contacts.street_address),
+                            city = COALESCE(excluded.city, contacts.city),
+                            zip_code = COALESCE(excluded.zip_code, contacts.zip_code),
+                            google_rating = COALESCE(excluded.google_rating, contacts.google_rating),
+                            review_count = COALESCE(excluded.review_count, contacts.review_count),
+                            google_place_id = COALESCE(excluded.google_place_id, contacts.google_place_id),
                             updated_at = CURRENT_TIMESTAMP
                     """, (uid, email, first_name, last_name, company, title,
                           phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
                           source, tags))
+                    conn.release_savepoint(sp)
                     if existing:
                         skipped += 1
                     else:
                         imported += 1
                 except Exception as e:
+                    conn.rollback_to_savepoint(sp)
                     errors.append(str(e))
         
         msg = f'Imported {imported} new contacts'
@@ -433,12 +436,12 @@ def edit_contact(contact_id):
     
     with get_db() as conn:
         conn.execute("""
-            UPDATE contacts SET email = ?, first_name = ?, last_name = ?, 
-                company = ?, title = ?, phone = ?, website = ?,
-                street_address = ?, city = ?, zip_code = ?,
-                google_rating = ?, review_count = ?, google_place_id = ?,
+            UPDATE contacts SET email = %s, first_name = %s, last_name = %s, 
+                company = %s, title = %s, phone = %s, website = %s,
+                street_address = %s, city = %s, zip_code = %s,
+                google_rating = %s, review_count = %s, google_place_id = %s,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND user_id = ?
+            WHERE id = %s AND user_id = %s
         """, (email, first_name, last_name, company, title, phone, website,
               street_address, city, zip_code, google_rating, review_count, google_place_id,
               contact_id, uid))
@@ -450,8 +453,8 @@ def edit_contact(contact_id):
 def delete_contact(contact_id):
     uid = get_current_user_id()
     with get_db() as conn:
-        conn.execute("DELETE FROM contact_sequences WHERE contact_id = ? AND contact_id IN (SELECT id FROM contacts WHERE user_id = ?)", (contact_id, uid))
-        conn.execute("DELETE FROM contacts WHERE id = ? AND user_id = ?", (contact_id, uid))
+        conn.execute("DELETE FROM contact_sequences WHERE contact_id = %s AND contact_id IN (SELECT id FROM contacts WHERE user_id = %s)", (contact_id, uid))
+        conn.execute("DELETE FROM contacts WHERE id = %s AND user_id = %s", (contact_id, uid))
     flash('Contact deleted', 'success')
     return redirect(url_for('contacts'))
 
@@ -468,7 +471,7 @@ def sequences():
             FROM sequences s
             LEFT JOIN sequence_steps ss ON ss.sequence_id = s.id
             LEFT JOIN contact_sequences cs ON cs.sequence_id = s.id
-            WHERE s.user_id = ?
+            WHERE s.user_id = %s
             GROUP BY s.id
             ORDER BY s.created_at DESC
         """, (uid,)).fetchall()
@@ -487,11 +490,11 @@ def new_sequence():
             return redirect(url_for('new_sequence'))
         
         with get_db() as conn:
-            cursor = conn.execute(
-                "INSERT INTO sequences (user_id, name, description) VALUES (?, ?, ?)",
+            result = conn.execute(
+                "INSERT INTO sequences (user_id, name, description) VALUES (%s, %s, %s) RETURNING id",
                 (uid, name, description)
-            )
-            seq_id = cursor.lastrowid
+            ).fetchone()
+            seq_id = result['id']
         
         flash(f'Created sequence "{name}"', 'success')
         return redirect(url_for('edit_sequence', seq_id=seq_id))
@@ -503,20 +506,20 @@ def edit_sequence(seq_id):
     """Edit a sequence."""
     uid = get_current_user_id()
     with get_db() as conn:
-        seq = conn.execute("SELECT * FROM sequences WHERE id = ? AND user_id = ?", (seq_id, uid)).fetchone()
+        seq = conn.execute("SELECT * FROM sequences WHERE id = %s AND user_id = %s", (seq_id, uid)).fetchone()
         if not seq:
             flash('Sequence not found', 'error')
             return redirect(url_for('sequences'))
         
         steps = conn.execute("""
-            SELECT * FROM sequence_steps WHERE sequence_id = ? ORDER BY step_number
+            SELECT * FROM sequence_steps WHERE sequence_id = %s ORDER BY step_number
         """, (seq_id,)).fetchall()
         
         enrollments = conn.execute("""
             SELECT cs.*, c.email, c.first_name, c.last_name
             FROM contact_sequences cs
             JOIN contacts c ON c.id = cs.contact_id
-            WHERE cs.sequence_id = ?
+            WHERE cs.sequence_id = %s
             ORDER BY cs.started_at DESC
             LIMIT 50
         """, (seq_id,)).fetchall()
@@ -537,13 +540,13 @@ def add_step(seq_id):
         return redirect(url_for('edit_sequence', seq_id=seq_id))
     
     with get_db() as conn:
-        seq = conn.execute("SELECT id FROM sequences WHERE id = ? AND user_id = ?", (seq_id, uid)).fetchone()
+        seq = conn.execute("SELECT id FROM sequences WHERE id = %s AND user_id = %s", (seq_id, uid)).fetchone()
         if not seq:
             flash('Sequence not found', 'error')
             return redirect(url_for('sequences'))
         conn.execute("""
             INSERT INTO sequence_steps (sequence_id, step_number, delay_days, subject, body)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT(sequence_id, step_number) DO UPDATE SET
                 delay_days = excluded.delay_days,
                 subject = excluded.subject,
@@ -563,26 +566,26 @@ def enroll_contacts(seq_id):
     title = request.form.get('title', '').strip()
     
     with get_db() as conn:
-        seq = conn.execute("SELECT id FROM sequences WHERE id = ? AND user_id = ?", (seq_id, uid)).fetchone()
+        seq = conn.execute("SELECT id FROM sequences WHERE id = %s AND user_id = %s", (seq_id, uid)).fetchone()
         if not seq:
             flash('Sequence not found', 'error')
             return redirect(url_for('sequences'))
         
         has_filters = tag or name or company or title
         if has_filters:
-            conditions = ["user_id = ?"]
+            conditions = ["user_id = %s"]
             params = [uid]
             if tag:
-                conditions.append("tags LIKE ?")
+                conditions.append("tags LIKE %s")
                 params.append(f"%{tag}%")
             if name:
-                conditions.append("(first_name LIKE ? OR last_name LIKE ?)")
+                conditions.append("(first_name LIKE %s OR last_name LIKE %s)")
                 params.extend([f"%{name}%", f"%{name}%"])
             if company:
-                conditions.append("company LIKE ?")
+                conditions.append("company LIKE %s")
                 params.append(f"%{company}%")
             if title:
-                conditions.append("title LIKE ?")
+                conditions.append("title LIKE %s")
                 params.append(f"%{title}%")
             contacts = conn.execute(
                 f"SELECT id, email FROM contacts WHERE {' AND '.join(conditions)}",
@@ -596,8 +599,9 @@ def enroll_contacts(seq_id):
             if not contact_ids:
                 flash('Please fill at least one filter field', 'error')
                 return redirect(url_for('edit_sequence', seq_id=seq_id))
+            placeholders = ','.join(['%s'] * len(contact_ids))
             contacts = conn.execute(
-                f"SELECT id, email FROM contacts WHERE user_id = ? AND id IN ({','.join('?' * len(contact_ids))})",
+                f"SELECT id, email FROM contacts WHERE user_id = %s AND id IN ({placeholders})",
                 [uid] + contact_ids
             ).fetchall()
         
@@ -605,7 +609,7 @@ def enroll_contacts(seq_id):
         for contact in contacts:
             existing = conn.execute("""
                 SELECT id, status FROM contact_sequences 
-                WHERE contact_id = ? AND sequence_id = ?
+                WHERE contact_id = %s AND sequence_id = %s
             """, (contact['id'], seq_id)).fetchone()
             
             if existing and existing['status'] == 'active':
@@ -615,14 +619,14 @@ def enroll_contacts(seq_id):
                 conn.execute("""
                     UPDATE contact_sequences 
                     SET status = 'active', current_step = 0, 
-                        next_send_at = datetime('now'),
-                        updated_at = datetime('now')
-                    WHERE id = ?
+                        next_send_at = NOW(),
+                        updated_at = NOW()
+                    WHERE id = %s
                 """, (existing['id'],))
             else:
                 conn.execute("""
                     INSERT INTO contact_sequences (contact_id, sequence_id, next_send_at)
-                    VALUES (?, ?, datetime('now'))
+                    VALUES (%s, %s, NOW())
                 """, (contact['id'], seq_id))
             enrolled += 1
         
@@ -656,8 +660,8 @@ def send_emails():
             JOIN sequence_steps ss ON ss.sequence_id = cs.sequence_id 
                 AND ss.step_number = cs.current_step + 1
             WHERE cs.status = 'active'
-                AND cs.next_send_at <= datetime('now')
-                AND c.user_id = ?
+                AND cs.next_send_at <= NOW()
+                AND c.user_id = %s
         """, (uid,)).fetchall()
     
     if request.method == 'POST' and resend:
@@ -692,35 +696,35 @@ def send_emails():
                     conn.execute("""
                         INSERT INTO emails_sent 
                         (contact_id, sequence_id, step_number, resend_id, subject, body)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """, (email['contact_id'], email['sequence_id'], email['step_number'], 
                           resend_id, subject, body))
                     
                     # Update sequence progress
                     next_step = conn.execute("""
                         SELECT delay_days FROM sequence_steps 
-                        WHERE sequence_id = ? AND step_number = ?
+                        WHERE sequence_id = %s AND step_number = %s
                     """, (email['sequence_id'], email['step_number'] + 1)).fetchone()
                     
                     if next_step:
                         next_send = datetime.now() + timedelta(days=next_step['delay_days'])
                         conn.execute("""
                             UPDATE contact_sequences 
-                            SET current_step = ?,
-                                last_sent_at = datetime('now'),
-                                next_send_at = ?,
-                                updated_at = datetime('now')
-                            WHERE id = ?
+                            SET current_step = %s,
+                                last_sent_at = NOW(),
+                                next_send_at = %s,
+                                updated_at = NOW()
+                            WHERE id = %s
                         """, (email['step_number'], next_send.isoformat(), email['enrollment_id']))
                     else:
                         conn.execute("""
                             UPDATE contact_sequences 
-                            SET current_step = ?,
+                            SET current_step = %s,
                                 status = 'completed',
-                                last_sent_at = datetime('now'),
+                                last_sent_at = NOW(),
                                 next_send_at = NULL,
-                                updated_at = datetime('now')
-                            WHERE id = ?
+                                updated_at = NOW()
+                            WHERE id = %s
                         """, (email['step_number'], email['enrollment_id']))
                 
                 sent += 1
@@ -738,17 +742,17 @@ def stats():
     uid = get_current_user_id()
     with get_db() as conn:
         total = conn.execute(
-            "SELECT COUNT(*) FROM emails_sent e JOIN contacts c ON c.id = e.contact_id WHERE c.user_id = ?",
+            "SELECT COUNT(*) FROM emails_sent e JOIN contacts c ON c.id = e.contact_id WHERE c.user_id = %s",
             (uid,)
         ).fetchone()[0]
         by_status = conn.execute("""
             SELECT e.status, COUNT(*) as count FROM emails_sent e
-            JOIN contacts c ON c.id = e.contact_id WHERE c.user_id = ?
+            JOIN contacts c ON c.id = e.contact_id WHERE c.user_id = %s
             GROUP BY e.status
         """, (uid,)).fetchall()
         
         replied = conn.execute(
-            "SELECT COUNT(*) FROM emails_sent e JOIN contacts c ON c.id = e.contact_id WHERE e.replied_at IS NOT NULL AND c.user_id = ?",
+            "SELECT COUNT(*) FROM emails_sent e JOIN contacts c ON c.id = e.contact_id WHERE e.replied_at IS NOT NULL AND c.user_id = %s",
             (uid,)
         ).fetchone()[0]
         
@@ -759,7 +763,7 @@ def stats():
                 COUNT(DISTINCT CASE WHEN es.replied_at IS NOT NULL THEN es.id END) as replied
             FROM sequences s
             LEFT JOIN emails_sent es ON es.sequence_id = s.id
-            WHERE s.user_id = ?
+            WHERE s.user_id = %s
             GROUP BY s.id
         """, (uid,)).fetchall()
     
@@ -777,11 +781,11 @@ def email_templates():
     uid = get_current_user_id()
     with get_db() as conn:
         rows = conn.execute("""
-            SELECT * FROM email_templates WHERE user_id = ? ORDER BY template_type, created_at DESC
+            SELECT * FROM email_templates WHERE user_id = %s ORDER BY template_type, created_at DESC
         """, (uid,)).fetchall()
         types = conn.execute("""
             SELECT DISTINCT template_type FROM email_templates 
-            WHERE user_id = ? AND template_type IS NOT NULL ORDER BY template_type
+            WHERE user_id = %s AND template_type IS NOT NULL ORDER BY template_type
         """, (uid,)).fetchall()
     return render_template('email_templates.html', templates=rows, types=[t['template_type'] for t in types])
 
@@ -800,7 +804,7 @@ def new_template():
     with get_db() as conn:
         conn.execute("""
             INSERT INTO email_templates (user_id, name, template_type, subject, body)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         """, (uid, name, template_type, subject, body))
     
     flash(f'Created template "{name}"', 'success')
@@ -860,7 +864,7 @@ def import_templates():
                 
                 conn.execute("""
                     INSERT INTO email_templates (user_id, name, template_type, subject, body)
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s)
                 """, (uid, name, template_type, subject_template, body_template))
                 imported += 1
         
@@ -886,8 +890,8 @@ def edit_template(tpl_id):
     
     with get_db() as conn:
         conn.execute("""
-            UPDATE email_templates SET name = ?, template_type = ?, subject = ?, body = ?
-            WHERE id = ? AND user_id = ?
+            UPDATE email_templates SET name = %s, template_type = %s, subject = %s, body = %s
+            WHERE id = %s AND user_id = %s
         """, (name, template_type, subject, body, tpl_id, uid))
     
     flash('Template updated', 'success')
@@ -897,7 +901,7 @@ def edit_template(tpl_id):
 def delete_template(tpl_id):
     uid = get_current_user_id()
     with get_db() as conn:
-        conn.execute("DELETE FROM email_templates WHERE id = ? AND user_id = ?", (tpl_id, uid))
+        conn.execute("DELETE FROM email_templates WHERE id = %s AND user_id = %s", (tpl_id, uid))
     flash('Template deleted', 'success')
     return redirect(url_for('email_templates'))
 
@@ -905,7 +909,7 @@ def delete_template(tpl_id):
 def api_templates():
     uid = get_current_user_id()
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM email_templates WHERE user_id = ? ORDER BY template_type, name", (uid,)).fetchall()
+        rows = conn.execute("SELECT * FROM email_templates WHERE user_id = %s ORDER BY template_type, name", (uid,)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 # ============== Sequence Test Runner ==============
@@ -918,11 +922,11 @@ def test_sequence():
             SELECT s.*, COUNT(ss.id) as step_count 
             FROM sequences s
             LEFT JOIN sequence_steps ss ON ss.sequence_id = s.id
-            WHERE s.user_id = ?
+            WHERE s.user_id = %s
             GROUP BY s.id ORDER BY s.name
         """, (uid,)).fetchall()
         all_contacts = conn.execute(
-            "SELECT id, email, first_name, last_name, company, title FROM contacts WHERE user_id = ? ORDER BY email",
+            "SELECT id, email, first_name, last_name, company, title FROM contacts WHERE user_id = %s ORDER BY email",
             (uid,)
         ).fetchall()
         
@@ -933,12 +937,12 @@ def test_sequence():
         
         if selected_seq and selected_contact:
             contact_row = conn.execute(
-                "SELECT * FROM contacts WHERE id = ? AND user_id = ?", (selected_contact, uid)
+                "SELECT * FROM contacts WHERE id = %s AND user_id = %s", (selected_contact, uid)
             ).fetchone()
             if contact_row:
                 contact_data = dict(contact_row)
                 steps = conn.execute("""
-                    SELECT * FROM sequence_steps WHERE sequence_id = ? ORDER BY step_number
+                    SELECT * FROM sequence_steps WHERE sequence_id = %s ORDER BY step_number
                 """, (selected_seq,)).fetchall()
                 for step in steps:
                     previews.append({
@@ -977,9 +981,9 @@ def test_send_email():
     
     uid = get_current_user_id()
     with get_db() as conn:
-        contact_row = conn.execute("SELECT * FROM contacts WHERE id = ? AND user_id = ?", (contact_id, uid)).fetchone()
+        contact_row = conn.execute("SELECT * FROM contacts WHERE id = %s AND user_id = %s", (contact_id, uid)).fetchone()
         step_row = conn.execute("""
-            SELECT * FROM sequence_steps WHERE sequence_id = ? AND step_number = ?
+            SELECT * FROM sequence_steps WHERE sequence_id = %s AND step_number = %s
         """, (seq_id, step_num)).fetchone()
     
     if not contact_row or not step_row:
@@ -1023,13 +1027,13 @@ def receive_webhook():
             # Store the event
             conn.execute("""
                 INSERT INTO events (resend_id, event_type, data, received_at)
-                VALUES (?, ?, ?, datetime('now'))
+                VALUES (%s, %s, %s, NOW())
             """, (resend_id, event_type, json.dumps(event_data)))
             
             # Find the email record
             email_record = conn.execute("""
                 SELECT id, contact_id, sequence_id FROM emails_sent 
-                WHERE resend_id = ?
+                WHERE resend_id = %s
             """, (resend_id,)).fetchone()
             
             if email_record:
@@ -1037,39 +1041,39 @@ def receive_webhook():
                 
                 if event_type == 'email.delivered':
                     conn.execute("""
-                        UPDATE emails_sent SET status = 'delivered', delivered_at = ? WHERE id = ?
+                        UPDATE emails_sent SET status = 'delivered', delivered_at = %s WHERE id = %s
                     """, (now, email_record['id']))
                     
                 elif event_type == 'email.opened':
                     conn.execute("""
-                        UPDATE emails_sent SET status = 'opened', opened_at = ? WHERE id = ?
+                        UPDATE emails_sent SET status = 'opened', opened_at = %s WHERE id = %s
                     """, (now, email_record['id']))
                     
                 elif event_type == 'email.clicked':
                     conn.execute("""
-                        UPDATE emails_sent SET status = 'clicked', clicked_at = ? WHERE id = ?
+                        UPDATE emails_sent SET status = 'clicked', clicked_at = %s WHERE id = %s
                     """, (now, email_record['id']))
                     
                 elif event_type == 'email.bounced':
                     conn.execute("""
-                        UPDATE emails_sent SET status = 'bounced' WHERE id = ?
+                        UPDATE emails_sent SET status = 'bounced' WHERE id = %s
                     """, (email_record['id'],))
                     if email_record['sequence_id']:
                         conn.execute("""
                             UPDATE contact_sequences 
-                            SET status = 'bounced', updated_at = datetime('now')
-                            WHERE contact_id = ? AND sequence_id = ?
+                            SET status = 'bounced', updated_at = NOW()
+                            WHERE contact_id = %s AND sequence_id = %s
                         """, (email_record['contact_id'], email_record['sequence_id']))
                     
                 elif event_type == 'email.received':
                     # Reply received - stop the sequence!
                     conn.execute("""
-                        UPDATE emails_sent SET replied_at = ? WHERE id = ?
+                        UPDATE emails_sent SET replied_at = %s WHERE id = %s
                     """, (now, email_record['id']))
                     conn.execute("""
                         UPDATE contact_sequences 
-                        SET status = 'replied', updated_at = datetime('now')
-                        WHERE contact_id = ? AND status = 'active'
+                        SET status = 'replied', updated_at = NOW()
+                        WHERE contact_id = %s AND status = 'active'
                     """, (email_record['contact_id'],))
         
         return jsonify({'status': 'ok'})
@@ -1125,18 +1129,18 @@ def api_list_contacts():
     with get_db() as conn:
         query = "SELECT * FROM contacts"
         params = []
-        conditions = ["user_id = ?"]
+        conditions = ["user_id = %s"]
         params.append(uid)
         if tag:
-            conditions.append("tags LIKE ?")
+            conditions.append("tags LIKE %s")
             params.append(f"%{tag}%")
         if search:
-            conditions.append("(email LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR company LIKE ?)")
+            conditions.append("(email LIKE %s OR first_name LIKE %s OR last_name LIKE %s OR company LIKE %s)")
             params.extend([f"%{search}%"] * 4)
         query += " WHERE " + " AND ".join(conditions)
         count_query = "SELECT COUNT(*) FROM contacts WHERE " + " AND ".join(conditions)
         count_params = list(params)
-        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
         rows = conn.execute(query, params).fetchall()
         total = conn.execute(count_query, count_params).fetchone()[0]
@@ -1184,40 +1188,40 @@ def api_add_contact():
             review_count = None
     
     with get_db() as conn:
-        existing = conn.execute("SELECT id FROM contacts WHERE email = ? AND user_id = ?", (email, uid)).fetchone()
+        existing = conn.execute("SELECT id FROM contacts WHERE email = %s AND user_id = %s", (email, uid)).fetchone()
         if existing:
             conn.execute("""
                 UPDATE contacts SET 
-                    first_name=COALESCE(NULLIF(?,''), first_name),
-                    last_name=COALESCE(NULLIF(?,''), last_name),
-                    company=COALESCE(NULLIF(?,''), company),
-                    title=COALESCE(NULLIF(?,''), title),
-                    phone=COALESCE(NULLIF(?,''), phone),
-                    website=COALESCE(NULLIF(?,''), website),
-                    street_address=COALESCE(NULLIF(?,''), street_address),
-                    city=COALESCE(NULLIF(?,''), city),
-                    zip_code=COALESCE(NULLIF(?,''), zip_code),
-                    google_rating=COALESCE(?, google_rating),
-                    review_count=COALESCE(?, review_count),
-                    google_place_id=COALESCE(NULLIF(?,''), google_place_id),
-                    tags=CASE WHEN ? != '' THEN ? ELSE tags END,
-                    updated_at=datetime('now')
-                WHERE id=?
+                    first_name=COALESCE(NULLIF(%s,''), first_name),
+                    last_name=COALESCE(NULLIF(%s,''), last_name),
+                    company=COALESCE(NULLIF(%s,''), company),
+                    title=COALESCE(NULLIF(%s,''), title),
+                    phone=COALESCE(NULLIF(%s,''), phone),
+                    website=COALESCE(NULLIF(%s,''), website),
+                    street_address=COALESCE(NULLIF(%s,''), street_address),
+                    city=COALESCE(NULLIF(%s,''), city),
+                    zip_code=COALESCE(NULLIF(%s,''), zip_code),
+                    google_rating=COALESCE(%s, google_rating),
+                    review_count=COALESCE(%s, review_count),
+                    google_place_id=COALESCE(NULLIF(%s,''), google_place_id),
+                    tags=CASE WHEN %s != '' THEN %s ELSE tags END,
+                    updated_at=NOW()
+                WHERE id=%s
             """, (first_name, last_name, company, title, phone, website,
                   street_address, city, zip_code, google_rating, review_count, google_place_id,
                   tags, tags, existing['id']))
-            contact = conn.execute("SELECT * FROM contacts WHERE id=? AND user_id=?", (existing['id'], uid)).fetchone()
+            contact = conn.execute("SELECT * FROM contacts WHERE id=%s AND user_id=%s", (existing['id'], uid)).fetchone()
             return jsonify({'contact': dict(contact), 'created': False, 'updated': True})
         else:
             conn.execute("""
                 INSERT INTO contacts (user_id, email, first_name, last_name, company, title,
                     phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
                     source, tags)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (uid, email, first_name, last_name, company, title,
                   phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
                   source, tags))
-            contact = conn.execute("SELECT * FROM contacts WHERE email=? AND user_id=?", (email, uid)).fetchone()
+            contact = conn.execute("SELECT * FROM contacts WHERE email=%s AND user_id=%s", (email, uid)).fetchone()
             return jsonify({'contact': dict(contact), 'created': True, 'updated': False}), 201
 
 @app.route('/api/contacts/bulk', methods=['POST'])
@@ -1238,8 +1242,9 @@ def api_add_contacts_bulk():
             if not email:
                 errors.append(f"Row {i}: missing email")
                 continue
+            sp = conn.savepoint()
             try:
-                existing = conn.execute("SELECT id FROM contacts WHERE email = ? AND user_id = ?", (email, uid)).fetchone()
+                existing = conn.execute("SELECT id FROM contacts WHERE email = %s AND user_id = %s", (email, uid)).fetchone()
                 if existing:
                     g_rating = c.get('google_rating')
                     r_count = c.get('review_count')
@@ -1251,21 +1256,21 @@ def api_add_contacts_bulk():
                         except (ValueError, TypeError): r_count = None
                     conn.execute("""
                         UPDATE contacts SET 
-                            first_name=COALESCE(NULLIF(?,''), first_name),
-                            last_name=COALESCE(NULLIF(?,''), last_name),
-                            company=COALESCE(NULLIF(?,''), company),
-                            title=COALESCE(NULLIF(?,''), title),
-                            phone=COALESCE(NULLIF(?,''), phone),
-                            website=COALESCE(NULLIF(?,''), website),
-                            street_address=COALESCE(NULLIF(?,''), street_address),
-                            city=COALESCE(NULLIF(?,''), city),
-                            zip_code=COALESCE(NULLIF(?,''), zip_code),
-                            google_rating=COALESCE(?, google_rating),
-                            review_count=COALESCE(?, review_count),
-                            google_place_id=COALESCE(NULLIF(?,''), google_place_id),
-                            source=COALESCE(NULLIF(?,''), source),
-                            updated_at=datetime('now')
-                        WHERE id=?
+                            first_name=COALESCE(NULLIF(%s,''), first_name),
+                            last_name=COALESCE(NULLIF(%s,''), last_name),
+                            company=COALESCE(NULLIF(%s,''), company),
+                            title=COALESCE(NULLIF(%s,''), title),
+                            phone=COALESCE(NULLIF(%s,''), phone),
+                            website=COALESCE(NULLIF(%s,''), website),
+                            street_address=COALESCE(NULLIF(%s,''), street_address),
+                            city=COALESCE(NULLIF(%s,''), city),
+                            zip_code=COALESCE(NULLIF(%s,''), zip_code),
+                            google_rating=COALESCE(%s, google_rating),
+                            review_count=COALESCE(%s, review_count),
+                            google_place_id=COALESCE(NULLIF(%s,''), google_place_id),
+                            source=COALESCE(NULLIF(%s,''), source),
+                            updated_at=NOW()
+                        WHERE id=%s
                     """, (c.get('first_name',''), c.get('last_name',''), c.get('company',''), 
                           c.get('title',''), c.get('phone',''), c.get('website',''),
                           c.get('street_address',''), c.get('city',''), c.get('zip_code',''),
@@ -1285,14 +1290,16 @@ def api_add_contacts_bulk():
                         INSERT INTO contacts (user_id, email, first_name, last_name, company, title,
                             phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
                             source, tags)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (uid, email, c.get('first_name',''), c.get('last_name',''), c.get('company',''),
                           c.get('title',''), c.get('phone',''), c.get('website',''),
                           c.get('street_address',''), c.get('city',''), c.get('zip_code',''),
                           g_rating, r_count, c.get('google_place_id',''),
                           c.get('source','api'), c.get('tags','')))
                     created += 1
+                conn.release_savepoint(sp)
             except Exception as e:
+                conn.rollback_to_savepoint(sp)
                 errors.append(f"Row {i} ({email}): {e}")
     
     return jsonify({'created': created, 'updated': updated, 'errors': errors})
@@ -1302,7 +1309,7 @@ def api_add_contacts_bulk():
 def api_get_contact(contact_id):
     uid = get_current_user_id()
     with get_db() as conn:
-        contact = conn.execute("SELECT * FROM contacts WHERE id=? AND user_id=?", (contact_id, uid)).fetchone()
+        contact = conn.execute("SELECT * FROM contacts WHERE id=%s AND user_id=%s", (contact_id, uid)).fetchone()
         if not contact:
             return jsonify({'error': 'Contact not found'}), 404
         
@@ -1310,7 +1317,7 @@ def api_get_contact(contact_id):
             SELECT cs.*, s.name as sequence_name 
             FROM contact_sequences cs
             JOIN sequences s ON s.id = cs.sequence_id
-            WHERE cs.contact_id = ?
+            WHERE cs.contact_id = %s
         """, (contact_id,)).fetchall()
     
     return jsonify({
@@ -1329,7 +1336,7 @@ def api_list_sequences():
             FROM sequences s
             LEFT JOIN sequence_steps ss ON ss.sequence_id = s.id
             LEFT JOIN contact_sequences cs ON cs.sequence_id = s.id AND cs.status = 'active'
-            WHERE s.user_id = ?
+            WHERE s.user_id = %s
             GROUP BY s.id ORDER BY s.name
         """, (uid,)).fetchall()
     return jsonify({'sequences': [dict(r) for r in rows]})
@@ -1339,17 +1346,17 @@ def api_list_sequences():
 def api_get_sequence(sequence_id):
     uid = get_current_user_id()
     with get_db() as conn:
-        seq = conn.execute("SELECT * FROM sequences WHERE id=? AND user_id=?", (sequence_id, uid)).fetchone()
+        seq = conn.execute("SELECT * FROM sequences WHERE id=%s AND user_id=%s", (sequence_id, uid)).fetchone()
         if not seq:
             return jsonify({'error': 'Sequence not found'}), 404
         steps = conn.execute("""
-            SELECT * FROM sequence_steps WHERE sequence_id=? ORDER BY step_number
+            SELECT * FROM sequence_steps WHERE sequence_id=%s ORDER BY step_number
         """, (sequence_id,)).fetchall()
         enrollments = conn.execute("""
             SELECT cs.*, c.email, c.first_name, c.last_name
             FROM contact_sequences cs
             JOIN contacts c ON c.id = cs.contact_id
-            WHERE cs.sequence_id = ?
+            WHERE cs.sequence_id = %s
         """, (sequence_id,)).fetchall()
     
     return jsonify({
@@ -1370,12 +1377,12 @@ def api_enroll_contact(sequence_id):
     contact_email = data.get('email', '').strip().lower()
     
     with get_db() as conn:
-        seq = conn.execute("SELECT id FROM sequences WHERE id=? AND user_id=?", (sequence_id, uid)).fetchone()
+        seq = conn.execute("SELECT id FROM sequences WHERE id=%s AND user_id=%s", (sequence_id, uid)).fetchone()
         if not seq:
             return jsonify({'error': 'Sequence not found'}), 404
         
         if contact_email and not contact_id:
-            contact = conn.execute("SELECT id FROM contacts WHERE email=? AND user_id=?", (contact_email, uid)).fetchone()
+            contact = conn.execute("SELECT id FROM contacts WHERE email=%s AND user_id=%s", (contact_email, uid)).fetchone()
             if not contact:
                 return jsonify({'error': f'Contact with email {contact_email} not found'}), 404
             contact_id = contact['id']
@@ -1383,13 +1390,13 @@ def api_enroll_contact(sequence_id):
         if not contact_id:
             return jsonify({'error': 'contact_id or email is required'}), 400
         
-        contact = conn.execute("SELECT id, email FROM contacts WHERE id=? AND user_id=?", (contact_id, uid)).fetchone()
+        contact = conn.execute("SELECT id, email FROM contacts WHERE id=%s AND user_id=%s", (contact_id, uid)).fetchone()
         if not contact:
             return jsonify({'error': 'Contact not found'}), 404
         
         existing = conn.execute("""
             SELECT id, status FROM contact_sequences 
-            WHERE contact_id=? AND sequence_id=?
+            WHERE contact_id=%s AND sequence_id=%s
         """, (contact_id, sequence_id)).fetchone()
         
         if existing:
@@ -1397,15 +1404,15 @@ def api_enroll_contact(sequence_id):
                 return jsonify({'error': 'Contact is already enrolled and active in this sequence'}), 409
             conn.execute("""
                 UPDATE contact_sequences 
-                SET status='active', current_step=0, started_at=datetime('now'),
-                    next_send_at=datetime('now'), updated_at=datetime('now')
-                WHERE id=?
+                SET status='active', current_step=0, started_at=NOW(),
+                    next_send_at=NOW(), updated_at=NOW()
+                WHERE id=%s
             """, (existing['id'],))
             return jsonify({'enrolled': True, 're_enrolled': True, 'contact_id': contact_id, 'sequence_id': sequence_id})
         
         conn.execute("""
             INSERT INTO contact_sequences (contact_id, sequence_id, status, current_step, next_send_at)
-            VALUES (?, ?, 'active', 0, datetime('now'))
+            VALUES (%s, %s, 'active', 0, NOW())
         """, (contact_id, sequence_id))
     
     return jsonify({'enrolled': True, 'contact_id': contact_id, 'sequence_id': sequence_id}), 201
@@ -1419,7 +1426,7 @@ def api_enroll_bulk(sequence_id):
         return jsonify({'error': 'contact_ids array is required'}), 400
     
     with get_db() as conn:
-        seq = conn.execute("SELECT id FROM sequences WHERE id=? AND user_id=?", (sequence_id, uid)).fetchone()
+        seq = conn.execute("SELECT id FROM sequences WHERE id=%s AND user_id=%s", (sequence_id, uid)).fetchone()
         if not seq:
             return jsonify({'error': 'Sequence not found'}), 404
         
@@ -1427,7 +1434,7 @@ def api_enroll_bulk(sequence_id):
         skipped = 0
         for cid in data['contact_ids']:
             existing = conn.execute("""
-                SELECT status FROM contact_sequences WHERE contact_id=? AND sequence_id=?
+                SELECT status FROM contact_sequences WHERE contact_id=%s AND sequence_id=%s
             """, (cid, sequence_id)).fetchone()
             if existing and existing['status'] == 'active':
                 skipped += 1
@@ -1435,14 +1442,14 @@ def api_enroll_bulk(sequence_id):
             if existing:
                 conn.execute("""
                     UPDATE contact_sequences 
-                    SET status='active', current_step=0, started_at=datetime('now'),
-                        next_send_at=datetime('now'), updated_at=datetime('now')
-                    WHERE contact_id=? AND sequence_id=?
+                    SET status='active', current_step=0, started_at=NOW(),
+                        next_send_at=NOW(), updated_at=NOW()
+                    WHERE contact_id=%s AND sequence_id=%s
                 """, (cid, sequence_id))
             else:
                 conn.execute("""
                     INSERT INTO contact_sequences (contact_id, sequence_id, status, current_step, next_send_at)
-                    VALUES (?, ?, 'active', 0, datetime('now'))
+                    VALUES (%s, %s, 'active', 0, NOW())
                 """, (cid, sequence_id))
             enrolled += 1
     
@@ -1453,7 +1460,7 @@ def api_enroll_bulk(sequence_id):
 def api_contact_sequences(contact_id):
     uid = get_current_user_id()
     with get_db() as conn:
-        contact = conn.execute("SELECT * FROM contacts WHERE id=? AND user_id=?", (contact_id, uid)).fetchone()
+        contact = conn.execute("SELECT * FROM contacts WHERE id=%s AND user_id=%s", (contact_id, uid)).fetchone()
         if not contact:
             return jsonify({'error': 'Contact not found'}), 404
         
@@ -1462,7 +1469,7 @@ def api_contact_sequences(contact_id):
                    (SELECT COUNT(*) FROM sequence_steps WHERE sequence_id = cs.sequence_id) as total_steps
             FROM contact_sequences cs
             JOIN sequences s ON s.id = cs.sequence_id
-            WHERE cs.contact_id = ?
+            WHERE cs.contact_id = %s
         """, (contact_id,)).fetchall()
     
     return jsonify({
@@ -1475,20 +1482,20 @@ def api_contact_sequences(contact_id):
 def api_stop_sequence(contact_id, sequence_id):
     uid = get_current_user_id()
     with get_db() as conn:
-        contact = conn.execute("SELECT id FROM contacts WHERE id=? AND user_id=?", (contact_id, uid)).fetchone()
+        contact = conn.execute("SELECT id FROM contacts WHERE id=%s AND user_id=%s", (contact_id, uid)).fetchone()
         if not contact:
             return jsonify({'error': 'Contact not found'}), 404
         enrollment = conn.execute("""
             SELECT id, status FROM contact_sequences 
-            WHERE contact_id=? AND sequence_id=?
+            WHERE contact_id=%s AND sequence_id=%s
         """, (contact_id, sequence_id)).fetchone()
         
         if not enrollment:
             return jsonify({'error': 'Enrollment not found'}), 404
         
         conn.execute("""
-            UPDATE contact_sequences SET status='stopped', updated_at=datetime('now')
-            WHERE id=?
+            UPDATE contact_sequences SET status='stopped', updated_at=NOW()
+            WHERE id=%s
         """, (enrollment['id'],))
     
     return jsonify({'stopped': True, 'contact_id': contact_id, 'sequence_id': sequence_id})

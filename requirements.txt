@@ -6,3 +6,5 @@ gunicorn
 resend
 flask-swagger-ui
 requests
+psycopg2-binary
+werkzeug

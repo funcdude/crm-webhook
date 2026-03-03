@@ -1,10 +1,10 @@
-# SimpleCRM — MVP v0.6
+# SimpleCRM — MVP v0.7
 
 ## Overview
 
-SimpleCRM is a lightweight email outreach CRM built with Flask and SQLite. It enables users to import contacts (primarily from Hunter.io CSV exports), create multi-step email sequences with automatic follow-ups, and track email engagement (opens, clicks, replies, bounces) via Resend webhooks. The system automatically stops sequences when a contact replies or an email bounces.
+SimpleCRM is a lightweight email outreach CRM built with Flask and PostgreSQL. It enables users to import contacts (primarily from Hunter.io CSV exports or Google Maps scraping CSVs), create multi-step email sequences with automatic follow-ups, and track email engagement (opens, clicks, replies, bounces) via Resend webhooks. The system automatically stops sequences when a contact replies or an email bounces.
 
-The app is designed to run on Replit as a single-process web application with a server-rendered UI.
+The app is designed to run on Replit Autoscale as a single-process web application with a server-rendered UI.
 
 ## User Preferences
 
@@ -18,8 +18,9 @@ Preferred communication style: Simple, everyday language.
 - **Entry point**: `main.py` contains all routes, business logic, and email sending functionality
 - **Server**: Gunicorn is specified in requirements for production serving
 
-### Database: SQLite
-- **Storage**: Single SQLite file (`crm.db`) managed through `db.py`
+### Database: PostgreSQL (Replit)
+- **Storage**: Replit-managed PostgreSQL via `DATABASE_URL` environment variable
+- **Driver**: `psycopg2-binary` with `RealDictCursor` wrapped in `PgCursorWrapper` and `DictRow` classes for SQLite-compatible dict-style row access
 - **Schema**: Defined as raw SQL in `db.py` with `CREATE TABLE IF NOT EXISTS` for auto-initialization
 - **Tables**:
   - `contacts` - Imported contacts with email, name, company, title, tags, source, phone, website, street_address, city, zip_code, google_rating (REAL), review_count (INTEGER), google_place_id (scoped by `user_id`)
@@ -30,8 +31,9 @@ Preferred communication style: Simple, everyday language.
   - `email_templates` - Reusable email templates with template types (scoped by `user_id`)
   - `users` - User accounts with `is_api_owner` flag for API key association
 - **Multi-tenancy**: All data tables (contacts, sequences, email_templates) have a `user_id` column. Each user only sees their own data. Migration in `db.py` handles upgrading old single-tenant databases.
-- **Access pattern**: Context manager (`get_db`) for connections, `dict_from_row` helper for converting rows to dictionaries
-- **Note**: If migrating to Postgres via Drizzle later, the schema is straightforward relational with no SQLite-specific features beyond the file-based storage
+- **Access pattern**: Context manager (`get_db`) for connections, `PgCursorWrapper` provides `execute/fetchone/fetchall/savepoint/release_savepoint/rollback_to_savepoint` methods; `DictRow(dict)` supports both `row['col']` and `row[0]` access
+- **Transaction safety**: PostgreSQL requires savepoints for error recovery within transactions; import and bulk API loops use `conn.savepoint()` / `conn.rollback_to_savepoint()` to isolate per-row errors
+- **SQL syntax**: Uses `%s` parameter markers (not `?`), `NOW()` (not `datetime('now')`), `RETURNING id` (not `lastrowid`), `SERIAL PRIMARY KEY` (not `INTEGER PRIMARY KEY AUTOINCREMENT`)
 
 ### Frontend: Server-rendered Jinja2 templates with Tailwind CSS
 - **Templating**: Jinja2 templates in `templates/` directory, extending `base.html`
@@ -69,7 +71,7 @@ All configuration is via environment variables (Replit Secrets):
 - `SECRET_KEY` - Flask session security key
 - `WEBHOOK_API_KEY` - Optional API key for webhook endpoint
 - `RESEND_WEBHOOK_SECRET` - Optional HMAC secret for webhook verification
-- `DB_PATH` - SQLite database file path (defaults to `crm.db`)
+- `DATABASE_URL` - PostgreSQL connection string (provided by Replit)
 - `CRM_API_KEY` - Shared API key for bot/external access to the REST API
 
 ### REST API for Bot Integration
@@ -97,12 +99,14 @@ See `bot_example.py` for a complete Python example showing how to use these endp
 - **Flask** (>=2.0.0) - Web framework
 - **Gunicorn** (>=20.0.0) - WSGI HTTP server for production
 - **Resend** (>=2.0.0) - Email sending API client
+- **psycopg2-binary** (>=2.9.0) - PostgreSQL database driver
 
 ### External Services
 - **Resend** (resend.com) - Email delivery service. Requires domain verification (SPF + DKIM DNS records). Used for both sending emails and receiving delivery/engagement webhooks.
 - **Hunter.io** - Not directly integrated via API, but the CSV import is designed to accept various CSV formats including Hunter.io exports. Supports flexible column mapping (Name, Work Email, Personal Email, Company, Title, etc.)
 
 ## Version History
+- **MVP v0.7** (2026-03-03): PostgreSQL migration — switched from SQLite to Replit PostgreSQL for persistent storage on autoscale deployments; CSV import handles contacts without email (placeholder addresses), 8 new contact fields, savepoint-based transaction safety
 - **MVP v0.6** (2026-02-22): Multi-tenancy — per-user data isolation, API key mapped to owner account, new users see empty CRM
 - **MVP v0.5** (2026-02-22): Web UI authentication — email/password login/register with strong password policy, secure sessions, route protection
 - **MVP v0.4** (2026-02-22): REST API with key authentication for bot integration — contacts CRUD, sequence enrollment, status checks
@@ -111,6 +115,7 @@ See `bot_example.py` for a complete Python example showing how to use these endp
 - **MVP v0.1**: Initial CRM with contacts, sequences, send queue, webhooks, stats
 
 ## Recent Changes
+- 2026-03-03: Migrated from SQLite to PostgreSQL — db.py rewritten with PgCursorWrapper/DictRow classes for psycopg2 compatibility; all SQL in main.py converted (?→%s, datetime('now')→NOW(), lastrowid→RETURNING id); savepoints added for import/bulk loops; CSV import generates placeholder emails for contacts without email addresses; 8 new contact fields (phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id) added throughout.
 - 2026-02-22: Added multi-tenancy — contacts, sequences, and templates are now scoped per user. Existing data is assigned to oskar.hurme@gmail.com on migration. API key (CRM_API_KEY) is linked to the owner user's data. New users registering see a completely empty CRM.
 - 2026-02-22: Added web UI authentication — email/password login and registration with password hashing, strong password validation (12+ chars, mixed case, number, special char), 7-day sessions with httponly cookies, nav bar shows logged-in user email and logout link.
 - 2026-02-22: Added REST API with Bearer token authentication for bot integration. Endpoints for contacts (list, add, bulk add), sequences (list, detail, enroll, bulk enroll, stop), and status checks. Example bot script at `bot_example.py`.
