@@ -13,6 +13,7 @@ import json
 import hmac
 import hashlib
 import io
+import time
 from functools import wraps
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, session
@@ -576,7 +577,9 @@ def send_emails():
     
     if request.method == 'POST' and resend:
         sent = 0
-        for email in due_emails:
+        for i, email in enumerate(due_emails):
+            if i > 0:
+                time.sleep(1)
             contact = {
                 'first_name': email['first_name'],
                 'last_name': email['last_name'],
