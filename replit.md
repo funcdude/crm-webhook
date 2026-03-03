@@ -22,7 +22,7 @@ Preferred communication style: Simple, everyday language.
 - **Storage**: Single SQLite file (`crm.db`) managed through `db.py`
 - **Schema**: Defined as raw SQL in `db.py` with `CREATE TABLE IF NOT EXISTS` for auto-initialization
 - **Tables**:
-  - `contacts` - Imported contacts with email, name, company, title, tags, source (scoped by `user_id`)
+  - `contacts` - Imported contacts with email, name, company, title, tags, source, phone, website, street_address, city, zip_code, google_rating (REAL), review_count (INTEGER), google_place_id (scoped by `user_id`)
   - `sequences` - Named multi-step email campaigns (scoped by `user_id`)
   - `sequence_steps` - Individual steps within a sequence (step number, delay days, subject, body template)
   - `contact_sequences` - Junction table tracking which contacts are enrolled in which sequences, their current step, and status

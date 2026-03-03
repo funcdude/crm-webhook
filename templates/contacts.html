@@ -28,36 +28,37 @@
         <thead class="bg-gray-50">
             <tr>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(0)">Email <span class="sort-arrow" data-col="0"></span></th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(1)">First Name <span class="sort-arrow" data-col="1"></span></th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(2)">Last Name <span class="sort-arrow" data-col="2"></span></th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(3)">Company <span class="sort-arrow" data-col="3"></span></th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(4)">Title <span class="sort-arrow" data-col="4"></span></th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(5)">Tags <span class="sort-arrow" data-col="5"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(1)">Name <span class="sort-arrow" data-col="1"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(2)">Company <span class="sort-arrow" data-col="2"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(3)">Title <span class="sort-arrow" data-col="3"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(4)">City <span class="sort-arrow" data-col="4"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(5)">Rating <span class="sort-arrow" data-col="5"></span></th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700 select-none" onclick="sortTable(6)">Tags <span class="sort-arrow" data-col="6"></span></th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Actions</th>
             </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
             {% for contact in contacts %}
-            <tr id="row-{{ contact.id }}">
+            <tr id="row-{{ contact.id }}" class="hover:bg-gray-50">
                 <td class="px-4 py-3">
                     <span class="view-mode text-sm text-gray-900">{{ contact.email }}</span>
-                    <input type="email" class="edit-mode hidden w-full text-sm p-1 border rounded" name="email" value="{{ contact.email }}">
                 </td>
                 <td class="px-4 py-3">
-                    <span class="view-mode text-sm text-gray-900">{{ contact.first_name or '-' }}</span>
-                    <input type="text" class="edit-mode hidden w-full text-sm p-1 border rounded" name="first_name" value="{{ contact.first_name or '' }}">
-                </td>
-                <td class="px-4 py-3">
-                    <span class="view-mode text-sm text-gray-900">{{ contact.last_name or '-' }}</span>
-                    <input type="text" class="edit-mode hidden w-full text-sm p-1 border rounded" name="last_name" value="{{ contact.last_name or '' }}">
+                    <span class="view-mode text-sm text-gray-900">{{ contact.first_name or '' }} {{ contact.last_name or '' }}</span>
                 </td>
                 <td class="px-4 py-3">
                     <span class="view-mode text-sm text-gray-900">{{ contact.company or '-' }}</span>
-                    <input type="text" class="edit-mode hidden w-full text-sm p-1 border rounded" name="company" value="{{ contact.company or '' }}">
                 </td>
                 <td class="px-4 py-3">
                     <span class="view-mode text-sm text-gray-500">{{ contact.title or '-' }}</span>
-                    <input type="text" class="edit-mode hidden w-full text-sm p-1 border rounded" name="title" value="{{ contact.title or '' }}">
+                </td>
+                <td class="px-4 py-3">
+                    <span class="view-mode text-sm text-gray-500">{{ contact.city or '-' }}</span>
+                </td>
+                <td class="px-4 py-3">
+                    <span class="view-mode text-sm text-gray-500">
+                        {% if contact.google_rating %}{{ contact.google_rating }}{% if contact.review_count %} ({{ contact.review_count }}){% endif %}{% else %}-{% endif %}
+                    </span>
                 </td>
                 <td class="px-4 py-3">
                     {% if contact.tags %}
@@ -72,20 +73,95 @@
                 </td>
                 <td class="px-4 py-3">
                     <div class="view-mode flex gap-2">
+                        <button onclick="toggleDetail({{ contact.id }})" class="text-blue-600 hover:text-blue-800 text-xs font-medium">Details</button>
                         <button onclick="startEdit({{ contact.id }})" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Edit</button>
                         <form method="POST" action="/contacts/{{ contact.id }}/delete" class="inline">
                             <button type="submit" onclick="return confirm('Delete this contact?')" class="text-red-500 hover:text-red-700 text-xs font-medium">Delete</button>
                         </form>
                     </div>
-                    <div class="edit-mode hidden flex gap-2">
-                        <button onclick="saveEdit({{ contact.id }})" class="text-green-600 hover:text-green-800 text-xs font-medium">Save</button>
-                        <button onclick="cancelEdit({{ contact.id }})" class="text-gray-500 hover:text-gray-700 text-xs font-medium">Cancel</button>
+                </td>
+            </tr>
+            <tr id="detail-{{ contact.id }}" class="hidden bg-gray-50">
+                <td colspan="8" class="px-4 py-3">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div><span class="text-gray-500">Phone:</span> {{ contact.phone or '-' }}</div>
+                        <div><span class="text-gray-500">Website:</span> {% if contact.website %}<a href="{{ contact.website }}" target="_blank" class="text-indigo-600 hover:underline">{{ contact.website[:30] }}{% if contact.website|length > 30 %}...{% endif %}</a>{% else %}-{% endif %}</div>
+                        <div><span class="text-gray-500">Address:</span> {{ contact.street_address or '-' }}</div>
+                        <div><span class="text-gray-500">Zip:</span> {{ contact.zip_code or '-' }}</div>
+                        <div><span class="text-gray-500">Google Rating:</span> {{ contact.google_rating or '-' }}</div>
+                        <div><span class="text-gray-500">Reviews:</span> {{ contact.review_count or '-' }}</div>
+                        <div><span class="text-gray-500">Place ID:</span> {{ contact.google_place_id or '-' }}</div>
+                        <div><span class="text-gray-500">Source:</span> {{ contact.source or '-' }}</div>
                     </div>
+                </td>
+            </tr>
+            <tr id="edit-{{ contact.id }}" class="hidden bg-indigo-50">
+                <td colspan="8" class="px-4 py-4">
+                    <form method="POST" action="/contacts/{{ contact.id }}/edit">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Email</label>
+                                <input type="email" name="email" value="{{ contact.email }}" required class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">First Name</label>
+                                <input type="text" name="first_name" value="{{ contact.first_name or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Last Name</label>
+                                <input type="text" name="last_name" value="{{ contact.last_name or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Company</label>
+                                <input type="text" name="company" value="{{ contact.company or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Title</label>
+                                <input type="text" name="title" value="{{ contact.title or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Phone</label>
+                                <input type="text" name="phone" value="{{ contact.phone or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Website</label>
+                                <input type="text" name="website" value="{{ contact.website or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Street Address</label>
+                                <input type="text" name="street_address" value="{{ contact.street_address or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">City</label>
+                                <input type="text" name="city" value="{{ contact.city or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Zip Code</label>
+                                <input type="text" name="zip_code" value="{{ contact.zip_code or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Google Rating</label>
+                                <input type="number" step="0.1" min="0" max="5" name="google_rating" value="{{ contact.google_rating or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Review Count</label>
+                                <input type="number" min="0" name="review_count" value="{{ contact.review_count or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-0.5">Google Place ID</label>
+                                <input type="text" name="google_place_id" value="{{ contact.google_place_id or '' }}" class="w-full p-1.5 border rounded text-sm">
+                            </div>
+                        </div>
+                        <div class="mt-3 flex gap-2">
+                            <button type="submit" class="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-green-700">Save</button>
+                            <button type="button" onclick="cancelEdit({{ contact.id }})" class="bg-gray-300 text-gray-700 px-3 py-1.5 rounded text-xs font-medium hover:bg-gray-400">Cancel</button>
+                        </div>
+                    </form>
                 </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="7" class="px-6 py-4 text-center text-gray-500">
+                <td colspan="8" class="px-6 py-4 text-center text-gray-500">
                     No contacts yet. <a href="/contacts/import" class="text-indigo-600 hover:underline">Import some!</a>
                 </td>
             </tr>
@@ -100,26 +176,38 @@ var currentSort = { col: -1, asc: true };
 function sortTable(colIndex) {
     var table = document.querySelector('table');
     var tbody = table.querySelector('tbody');
-    var rows = Array.from(tbody.querySelectorAll('tr[id^="row-"]'));
+    var mainRows = Array.from(tbody.querySelectorAll('tr[id^="row-"]'));
     
-    if (rows.length === 0) return;
+    if (mainRows.length === 0) return;
     
     var asc = (currentSort.col === colIndex) ? !currentSort.asc : true;
     currentSort = { col: colIndex, asc: asc };
     
-    rows.sort(function(a, b) {
+    mainRows.sort(function(a, b) {
         var aCell = a.cells[colIndex];
         var bCell = b.cells[colIndex];
         var aText = (aCell.querySelector('.view-mode') || aCell).textContent.trim().toLowerCase();
         var bText = (bCell.querySelector('.view-mode') || bCell).textContent.trim().toLowerCase();
         if (aText === '-') aText = '';
         if (bText === '-') bText = '';
+        var aNum = parseFloat(aText);
+        var bNum = parseFloat(bText);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return asc ? aNum - bNum : bNum - aNum;
+        }
         if (aText < bText) return asc ? -1 : 1;
         if (aText > bText) return asc ? 1 : -1;
         return 0;
     });
     
-    rows.forEach(function(row) { tbody.appendChild(row); });
+    mainRows.forEach(function(row) {
+        var id = row.id.replace('row-', '');
+        tbody.appendChild(row);
+        var detail = document.getElementById('detail-' + id);
+        var edit = document.getElementById('edit-' + id);
+        if (detail) tbody.appendChild(detail);
+        if (edit) tbody.appendChild(edit);
+    });
     
     document.querySelectorAll('.sort-arrow').forEach(function(el) {
         el.textContent = '';
@@ -128,38 +216,23 @@ function sortTable(colIndex) {
     if (arrow) arrow.textContent = asc ? ' \u25B2' : ' \u25BC';
 }
 
+function toggleDetail(id) {
+    var detail = document.getElementById('detail-' + id);
+    detail.classList.toggle('hidden');
+    var edit = document.getElementById('edit-' + id);
+    if (!edit.classList.contains('hidden')) edit.classList.add('hidden');
+}
+
 function startEdit(id) {
-    var row = document.getElementById('row-' + id);
-    row.querySelectorAll('.view-mode').forEach(function(el) { el.classList.add('hidden'); });
-    row.querySelectorAll('.edit-mode').forEach(function(el) { el.classList.remove('hidden'); });
+    var edit = document.getElementById('edit-' + id);
+    edit.classList.remove('hidden');
+    var detail = document.getElementById('detail-' + id);
+    if (!detail.classList.contains('hidden')) detail.classList.add('hidden');
 }
 
 function cancelEdit(id) {
-    var row = document.getElementById('row-' + id);
-    row.querySelectorAll('.view-mode').forEach(function(el) { el.classList.remove('hidden'); });
-    row.querySelectorAll('.edit-mode').forEach(function(el) { el.classList.add('hidden'); });
-}
-
-function saveEdit(id) {
-    var row = document.getElementById('row-' + id);
-    var form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/contacts/' + id + '/edit';
-    
-    var fields = ['email', 'first_name', 'last_name', 'company', 'title'];
-    fields.forEach(function(field) {
-        var input = row.querySelector('input[name="' + field + '"]');
-        if (input) {
-            var hidden = document.createElement('input');
-            hidden.type = 'hidden';
-            hidden.name = field;
-            hidden.value = input.value;
-            form.appendChild(hidden);
-        }
-    });
-    
-    document.body.appendChild(form);
-    form.submit();
+    var edit = document.getElementById('edit-' + id);
+    edit.classList.add('hidden');
 }
 </script>
 {% endblock %}

@@ -18,6 +18,14 @@ CREATE TABLE IF NOT EXISTS contacts (
     last_name TEXT,
     company TEXT,
     title TEXT,
+    phone TEXT,
+    website TEXT,
+    street_address TEXT,
+    city TEXT,
+    zip_code TEXT,
+    google_rating REAL,
+    review_count INTEGER,
+    google_place_id TEXT,
     source TEXT DEFAULT 'manual',
     tags TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -251,6 +259,21 @@ def init_db():
 
         if not _column_exists(conn, 'users', 'is_api_owner'):
             conn.execute("ALTER TABLE users ADD COLUMN is_api_owner INTEGER DEFAULT 0")
+
+        new_contact_columns = [
+            ('phone', 'TEXT'),
+            ('website', 'TEXT'),
+            ('street_address', 'TEXT'),
+            ('city', 'TEXT'),
+            ('zip_code', 'TEXT'),
+            ('google_rating', 'REAL'),
+            ('review_count', 'INTEGER'),
+            ('google_place_id', 'TEXT'),
+        ]
+        for col_name, col_type in new_contact_columns:
+            if not _column_exists(conn, 'contacts', col_name):
+                conn.execute(f"ALTER TABLE contacts ADD COLUMN {col_name} {col_type}")
+                print(f"[DB] Added column contacts.{col_name}", file=sys.stderr)
 
         migrate_owner_data(conn)
         conn.commit()

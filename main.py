@@ -163,6 +163,11 @@ def personalize(template: str, contact: dict) -> str:
         '{company}': contact.get('company') or 'your company',
         '{email}': contact.get('email') or '',
         '{title}': contact.get('title') or '',
+        '{phone}': contact.get('phone') or '',
+        '{website}': contact.get('website') or '',
+        '{city}': contact.get('city') or '',
+        '{street_address}': contact.get('street_address') or '',
+        '{zip_code}': contact.get('zip_code') or '',
     }
     for placeholder, value in replacements.items():
         result = result.replace(placeholder, value)
@@ -307,6 +312,25 @@ def import_contacts():
                 
                 company = get_csv_value(row, 'company', 'organization', 'company name', 'company_name', 'org')
                 title = get_csv_value(row, 'title', 'position', 'job title', 'job_title', 'role')
+                phone = get_csv_value(row, 'phone', 'phone number', 'phone_number', 'telephone', 'tel')
+                website = get_csv_value(row, 'website', 'url', 'web', 'site', 'website_url')
+                street_address = get_csv_value(row, 'street address', 'street_address', 'address', 'street')
+                city = get_csv_value(row, 'city', 'location', 'city_name')
+                zip_code = get_csv_value(row, 'zip code', 'zip_code', 'zip', 'postal code', 'postal_code', 'postcode')
+                google_rating = get_csv_value(row, 'google rating', 'google_rating', 'rating')
+                review_count = get_csv_value(row, 'review count', 'review_count', 'reviews', 'number of reviews')
+                google_place_id = get_csv_value(row, 'google place id', 'google_place_id', 'place id', 'place_id')
+                
+                if google_rating:
+                    try:
+                        google_rating = float(google_rating)
+                    except ValueError:
+                        google_rating = None
+                if review_count:
+                    try:
+                        review_count = int(float(review_count))
+                    except ValueError:
+                        review_count = None
                 
                 if not email:
                     continue
@@ -314,15 +338,27 @@ def import_contacts():
                 try:
                     existing = conn.execute("SELECT id FROM contacts WHERE email = ? AND user_id = ?", (email, uid)).fetchone()
                     conn.execute("""
-                        INSERT INTO contacts (user_id, email, first_name, last_name, company, title, source, tags)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO contacts (user_id, email, first_name, last_name, company, title, 
+                            phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
+                            source, tags)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(email, user_id) DO UPDATE SET
                             first_name = COALESCE(excluded.first_name, first_name),
                             last_name = COALESCE(excluded.last_name, last_name),
                             company = COALESCE(excluded.company, company),
                             title = COALESCE(excluded.title, title),
+                            phone = COALESCE(excluded.phone, phone),
+                            website = COALESCE(excluded.website, website),
+                            street_address = COALESCE(excluded.street_address, street_address),
+                            city = COALESCE(excluded.city, city),
+                            zip_code = COALESCE(excluded.zip_code, zip_code),
+                            google_rating = COALESCE(excluded.google_rating, google_rating),
+                            review_count = COALESCE(excluded.review_count, review_count),
+                            google_place_id = COALESCE(excluded.google_place_id, google_place_id),
                             updated_at = CURRENT_TIMESTAMP
-                    """, (uid, email, first_name, last_name, company, title, source, tags))
+                    """, (uid, email, first_name, last_name, company, title,
+                          phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
+                          source, tags))
                     if existing:
                         skipped += 1
                     else:
@@ -346,6 +382,27 @@ def edit_contact(contact_id):
     last_name = request.form.get('last_name', '').strip() or None
     company = request.form.get('company', '').strip() or None
     title = request.form.get('title', '').strip() or None
+    phone = request.form.get('phone', '').strip() or None
+    website = request.form.get('website', '').strip() or None
+    street_address = request.form.get('street_address', '').strip() or None
+    city = request.form.get('city', '').strip() or None
+    zip_code = request.form.get('zip_code', '').strip() or None
+    google_rating_str = request.form.get('google_rating', '').strip()
+    review_count_str = request.form.get('review_count', '').strip()
+    google_place_id = request.form.get('google_place_id', '').strip() or None
+    
+    google_rating = None
+    if google_rating_str:
+        try:
+            google_rating = float(google_rating_str)
+        except ValueError:
+            pass
+    review_count = None
+    if review_count_str:
+        try:
+            review_count = int(review_count_str)
+        except ValueError:
+            pass
     
     if not email:
         flash('Email is required', 'error')
@@ -354,9 +411,14 @@ def edit_contact(contact_id):
     with get_db() as conn:
         conn.execute("""
             UPDATE contacts SET email = ?, first_name = ?, last_name = ?, 
-                company = ?, title = ?, updated_at = CURRENT_TIMESTAMP
+                company = ?, title = ?, phone = ?, website = ?,
+                street_address = ?, city = ?, zip_code = ?,
+                google_rating = ?, review_count = ?, google_place_id = ?,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND user_id = ?
-        """, (email, first_name, last_name, company, title, contact_id, uid))
+        """, (email, first_name, last_name, company, title, phone, website,
+              street_address, city, zip_code, google_rating, review_count, google_place_id,
+              contact_id, uid))
     
     flash('Contact updated', 'success')
     return redirect(url_for('contacts'))
@@ -1076,8 +1138,27 @@ def api_add_contact():
     last_name = data.get('last_name', '').strip()
     company = data.get('company', '').strip()
     title = data.get('title', '').strip()
+    phone = data.get('phone', '').strip()
+    website = data.get('website', '').strip()
+    street_address = data.get('street_address', '').strip()
+    city = data.get('city', '').strip()
+    zip_code = data.get('zip_code', '').strip()
+    google_rating = data.get('google_rating')
+    review_count = data.get('review_count')
+    google_place_id = data.get('google_place_id', '').strip()
     source = data.get('source', 'api').strip()
     tags = data.get('tags', '').strip()
+    
+    if google_rating is not None:
+        try:
+            google_rating = float(google_rating)
+        except (ValueError, TypeError):
+            google_rating = None
+    if review_count is not None:
+        try:
+            review_count = int(review_count)
+        except (ValueError, TypeError):
+            review_count = None
     
     with get_db() as conn:
         existing = conn.execute("SELECT id FROM contacts WHERE email = ? AND user_id = ?", (email, uid)).fetchone()
@@ -1088,17 +1169,31 @@ def api_add_contact():
                     last_name=COALESCE(NULLIF(?,''), last_name),
                     company=COALESCE(NULLIF(?,''), company),
                     title=COALESCE(NULLIF(?,''), title),
+                    phone=COALESCE(NULLIF(?,''), phone),
+                    website=COALESCE(NULLIF(?,''), website),
+                    street_address=COALESCE(NULLIF(?,''), street_address),
+                    city=COALESCE(NULLIF(?,''), city),
+                    zip_code=COALESCE(NULLIF(?,''), zip_code),
+                    google_rating=COALESCE(?, google_rating),
+                    review_count=COALESCE(?, review_count),
+                    google_place_id=COALESCE(NULLIF(?,''), google_place_id),
                     tags=CASE WHEN ? != '' THEN ? ELSE tags END,
                     updated_at=datetime('now')
                 WHERE id=?
-            """, (first_name, last_name, company, title, tags, tags, existing['id']))
+            """, (first_name, last_name, company, title, phone, website,
+                  street_address, city, zip_code, google_rating, review_count, google_place_id,
+                  tags, tags, existing['id']))
             contact = conn.execute("SELECT * FROM contacts WHERE id=? AND user_id=?", (existing['id'], uid)).fetchone()
             return jsonify({'contact': dict(contact), 'created': False, 'updated': True})
         else:
             conn.execute("""
-                INSERT INTO contacts (user_id, email, first_name, last_name, company, title, source, tags)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (uid, email, first_name, last_name, company, title, source, tags))
+                INSERT INTO contacts (user_id, email, first_name, last_name, company, title,
+                    phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
+                    source, tags)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (uid, email, first_name, last_name, company, title,
+                  phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
+                  source, tags))
             contact = conn.execute("SELECT * FROM contacts WHERE email=? AND user_id=?", (email, uid)).fetchone()
             return jsonify({'contact': dict(contact), 'created': True, 'updated': False}), 201
 
@@ -1123,24 +1218,56 @@ def api_add_contacts_bulk():
             try:
                 existing = conn.execute("SELECT id FROM contacts WHERE email = ? AND user_id = ?", (email, uid)).fetchone()
                 if existing:
+                    g_rating = c.get('google_rating')
+                    r_count = c.get('review_count')
+                    if g_rating is not None:
+                        try: g_rating = float(g_rating)
+                        except (ValueError, TypeError): g_rating = None
+                    if r_count is not None:
+                        try: r_count = int(r_count)
+                        except (ValueError, TypeError): r_count = None
                     conn.execute("""
                         UPDATE contacts SET 
                             first_name=COALESCE(NULLIF(?,''), first_name),
                             last_name=COALESCE(NULLIF(?,''), last_name),
                             company=COALESCE(NULLIF(?,''), company),
                             title=COALESCE(NULLIF(?,''), title),
+                            phone=COALESCE(NULLIF(?,''), phone),
+                            website=COALESCE(NULLIF(?,''), website),
+                            street_address=COALESCE(NULLIF(?,''), street_address),
+                            city=COALESCE(NULLIF(?,''), city),
+                            zip_code=COALESCE(NULLIF(?,''), zip_code),
+                            google_rating=COALESCE(?, google_rating),
+                            review_count=COALESCE(?, review_count),
+                            google_place_id=COALESCE(NULLIF(?,''), google_place_id),
                             source=COALESCE(NULLIF(?,''), source),
                             updated_at=datetime('now')
                         WHERE id=?
                     """, (c.get('first_name',''), c.get('last_name',''), c.get('company',''), 
-                          c.get('title',''), c.get('source',''), existing['id']))
+                          c.get('title',''), c.get('phone',''), c.get('website',''),
+                          c.get('street_address',''), c.get('city',''), c.get('zip_code',''),
+                          g_rating, r_count, c.get('google_place_id',''),
+                          c.get('source',''), existing['id']))
                     updated += 1
                 else:
+                    g_rating = c.get('google_rating')
+                    r_count = c.get('review_count')
+                    if g_rating is not None:
+                        try: g_rating = float(g_rating)
+                        except (ValueError, TypeError): g_rating = None
+                    if r_count is not None:
+                        try: r_count = int(r_count)
+                        except (ValueError, TypeError): r_count = None
                     conn.execute("""
-                        INSERT INTO contacts (user_id, email, first_name, last_name, company, title, source, tags)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO contacts (user_id, email, first_name, last_name, company, title,
+                            phone, website, street_address, city, zip_code, google_rating, review_count, google_place_id,
+                            source, tags)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (uid, email, c.get('first_name',''), c.get('last_name',''), c.get('company',''),
-                          c.get('title',''), c.get('source','api'), c.get('tags','')))
+                          c.get('title',''), c.get('phone',''), c.get('website',''),
+                          c.get('street_address',''), c.get('city',''), c.get('zip_code',''),
+                          g_rating, r_count, c.get('google_place_id',''),
+                          c.get('source','api'), c.get('tags','')))
                     created += 1
             except Exception as e:
                 errors.append(f"Row {i} ({email}): {e}")
