@@ -272,17 +272,21 @@ def import_contacts():
             flash('No file selected', 'error')
             return redirect(url_for('import_contacts'))
         
-        source = request.form.get('source', 'hunter')
-        tags = request.form.get('tags', '').strip()
+        form_source = request.form.get('source', '').strip()
+        form_tags = request.form.get('tags', '').strip()
         
         content = file.read().decode('utf-8-sig')
         reader = csv.DictReader(io.StringIO(content))
         
         imported = 0
         skipped = 0
+        no_email_count = 0
         errors = []
         
         fieldnames_lower = {name.lower().strip(): name for name in reader.fieldnames} if reader.fieldnames else {}
+        
+        has_csv_source = 'source' in fieldnames_lower
+        has_csv_tags = 'tags' in fieldnames_lower
         
         def get_csv_value(row, *possible_names):
             for name in possible_names:
@@ -316,10 +320,22 @@ def import_contacts():
                 website = get_csv_value(row, 'website', 'url', 'web', 'site', 'website_url')
                 street_address = get_csv_value(row, 'street address', 'street_address', 'address', 'street')
                 city = get_csv_value(row, 'city', 'location', 'city_name')
+                if not city:
+                    city = get_csv_value(row, 'county', 'county_name')
                 zip_code = get_csv_value(row, 'zip code', 'zip_code', 'zip', 'postal code', 'postal_code', 'postcode')
                 google_rating = get_csv_value(row, 'google rating', 'google_rating', 'rating')
                 review_count = get_csv_value(row, 'review count', 'review_count', 'reviews', 'number of reviews')
                 google_place_id = get_csv_value(row, 'google place id', 'google_place_id', 'place id', 'place_id')
+                
+                if has_csv_source:
+                    source = get_csv_value(row, 'source') or form_source or 'import'
+                else:
+                    source = form_source or 'import'
+                
+                if has_csv_tags:
+                    tags = get_csv_value(row, 'tags') or form_tags
+                else:
+                    tags = form_tags
                 
                 if google_rating:
                     try:
@@ -333,7 +349,12 @@ def import_contacts():
                         review_count = None
                 
                 if not email:
-                    continue
+                    if not company and not google_place_id:
+                        continue
+                    slug = re.sub(r'[^a-z0-9]+', '-', (company or 'unknown').lower()).strip('-')[:50]
+                    unique_suffix = google_place_id[:12] if google_place_id else str(hash((company or '') + (street_address or '') + (phone or '')))[-8:]
+                    email = f"no-email-{slug}-{unique_suffix}@placeholder.invalid"
+                    no_email_count += 1
                 
                 try:
                     existing = conn.execute("SELECT id FROM contacts WHERE email = ? AND user_id = ?", (email, uid)).fetchone()
@@ -369,6 +390,8 @@ def import_contacts():
         msg = f'Imported {imported} new contacts'
         if skipped:
             msg += f', {skipped} duplicates updated'
+        if no_email_count:
+            msg += f' ({no_email_count} without email address)'
         flash(msg, 'success')
         return redirect(url_for('contacts'))
     
